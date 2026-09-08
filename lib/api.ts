@@ -1,0 +1,162 @@
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+export class ApiClient {
+  private static getToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem('cadence_token');
+  }
+
+  private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const token = this.getToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...((options.headers as Record<string, string>) || {}),
+    };
+
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      const message = errorData.message || res.statusText || 'API request failed';
+      throw new Error(Array.isArray(message) ? message.join(', ') : message);
+    }
+
+    return res.json();
+  }
+
+  // Auth
+  static async login(email: string, password: string) {
+    return this.request<{ user: any; accessToken: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  static async register(data: any) {
+    return this.request<{ user: any; accessToken: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async getMe() {
+    return this.request<any>('/auth/me');
+  }
+
+  // Projects
+  static async getProjects() {
+    return this.request<any[]>('/projects');
+  }
+
+  static async createProject(data: any) {
+    return this.request<any>('/projects', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async updateProject(id: string, data: any) {
+    return this.request<any>(`/projects/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async deleteProject(id: string) {
+    return this.request<any>(`/projects/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Reports
+  static async saveDraft(data: any) {
+    return this.request<any>('/reports/draft', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async submitReport(id: string, data?: any) {
+    return this.request<any>(`/reports/${id}/submit`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    });
+  }
+
+  static async getMyHistory(page = 1, limit = 20) {
+    return this.request<any>(`/reports/my-history?page=${page}&limit=${limit}`);
+  }
+
+  static async getReports(params?: { week?: string; memberId?: string; projectId?: string; status?: string }) {
+    const cleanParams: Record<string, string> = {};
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v && v !== 'undefined' && v !== 'ALL') {
+          cleanParams[k] = v;
+        }
+      }
+    }
+    const query = new URLSearchParams(cleanParams).toString();
+    return this.request<any>(`/reports${query ? `?${query}` : ''}`);
+  }
+
+  static async getReport(id: string) {
+    return this.request<any>(`/reports/${id}`);
+  }
+
+  static async reviewReport(id: string, action: 'APPROVE' | 'REQUEST_CHANGES', comment?: string) {
+    return this.request<any>(`/reports/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ action, comment }),
+    });
+  }
+
+  // Dashboard
+  static async getDashboardSummary(week?: string) {
+    const validWeek = week && week !== 'undefined' && week !== 'ALL' ? `?week=${week}` : '';
+    return this.request<any>(`/dashboard/summary${validWeek}`);
+  }
+
+  static async getDashboardCharts() {
+    return this.request<any>('/dashboard/charts');
+  }
+
+  static async getBlockersAndAchievements(week?: string) {
+    const validWeek = week && week !== 'undefined' && week !== 'ALL' ? `?week=${week}` : '';
+    return this.request<any>(`/dashboard/blockers-and-achievements${validWeek}`);
+  }
+
+  // Users
+  static async getUsers() {
+    return this.request<any[]>('/users');
+  }
+
+  static async getUserProfile(id: string) {
+    return this.request<any>(`/users/${id}`);
+  }
+
+  static async updateUserRole(id: string, role: string) {
+    return this.request<any>(`/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  static async toggleUserStatus(id: string) {
+    return this.request<any>(`/users/${id}/status`, {
+      method: 'PATCH',
+    });
+  }
+
+  // AI
+  static async chatAi(query: string) {
+    return this.request<{ answer: string; modelUsed: string }>('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+  }
+}
