@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { ApiClient } from '@/lib/api';
-import { MOCK_PROJECTS } from '@/lib/mock-data';
 import { Project } from '@/lib/types';
 import {
   FolderGit2,
@@ -17,7 +16,7 @@ import {
 
 export default function ProjectsManagementPage() {
   const { isManager } = useAuth();
-  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null);
   const [currentProject, setCurrentProject] = useState<Partial<Project>>({
     name: '',
@@ -31,9 +30,10 @@ export default function ProjectsManagementPage() {
     setIsLoading(true);
     try {
       const data = await ApiClient.getProjects();
-      if (data && data.length) setProjects(data);
-    } catch {
-      setProjects(MOCK_PROJECTS);
+      setProjects(data || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load projects from database.');
+      setProjects([]);
     } finally {
       setIsLoading(false);
     }

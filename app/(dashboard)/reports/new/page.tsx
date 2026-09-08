@@ -4,7 +4,6 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { ApiClient } from '@/lib/api';
-import { MOCK_PROJECTS } from '@/lib/mock-data';
 import { TaskItem, TaskPriority, TaskStatus } from '@/lib/types';
 import {
   Save,
@@ -24,8 +23,8 @@ function WeeklyReportFormContent() {
   const editId = searchParams.get('id');
   const { user } = useAuth();
 
-  const [projects, setProjects] = useState<any[]>(MOCK_PROJECTS);
-  const [projectId, setProjectId] = useState(MOCK_PROJECTS[0].id);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectId, setProjectId] = useState<string>('');
   const [reportId, setReportId] = useState<string | null>(editId || null);
 
   // Default current week dates (Mon - Fri)
@@ -38,52 +37,35 @@ function WeeklyReportFormContent() {
   // Tasks table
   const [tasks, setTasks] = useState<TaskItem[]>([
     {
-      taskName: 'Navigation drawer animation specs & gesture handlers',
+      taskName: '',
       priority: 'HIGH',
       status: 'DONE',
       plannedPercentage: 100,
       actualPercentage: 100,
-      plannedHours: 12,
-      spentHours: 11,
-      deliverableOutput: 'https://github.com/org/mobile/pull/142',
-    },
-    {
-      taskName: 'Refactor theme tokens to support automated dark mode',
-      priority: 'MEDIUM',
-      status: 'IN_PROGRESS',
-      plannedPercentage: 100,
-      actualPercentage: 70,
       plannedHours: 8,
-      spentHours: 9,
-      deliverableOutput: 'Branch: feat/dark-tokens',
+      spentHours: 8,
+      deliverableOutput: '',
     },
   ]);
 
   // Next week
-  const [tasksPlannedNextWeek, setTasksPlannedNextWeek] = useState(
-    'Finalize biometric authentication flow and integrate SQLite offline queue.',
-  );
+  const [tasksPlannedNextWeek, setTasksPlannedNextWeek] = useState('');
 
   // Blockers
-  const [blockers, setBlockers] = useState<string[]>([
-    'Staging AWS quota limit reached for c6g.large instances',
-    'Waiting on backend GraphQL schema update for offline report queueing',
-  ]);
-  const [keyBlockerIndex, setKeyBlockerIndex] = useState<number | null>(0);
+  const [blockers, setBlockers] = useState<string[]>([]);
+  const [keyBlockerIndex, setKeyBlockerIndex] = useState<number | null>(null);
 
   // Achievements
-  const [achievements, setAchievements] = useState<string[]>([
-    'Delivered mobile navigation prototype ahead of sprint timeline',
-  ]);
-  const [keyAchievementIndex, setKeyAchievementIndex] = useState<number | null>(0);
+  const [achievements, setAchievements] = useState<string[]>([]);
+  const [keyAchievementIndex, setKeyAchievementIndex] = useState<number | null>(null);
 
   // Time breakdown
-  const [devHours, setDevHours] = useState(24);
-  const [testingHours, setTestingHours] = useState(6);
-  const [meetingHours, setMeetingHours] = useState(4);
-  const [docHours, setDocHours] = useState(4);
+  const [devHours, setDevHours] = useState(0);
+  const [testingHours, setTestingHours] = useState(0);
+  const [meetingHours, setMeetingHours] = useState(0);
+  const [docHours, setDocHours] = useState(0);
 
-  const [notes, setNotes] = useState('Design team was very responsive during review.');
+  const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 

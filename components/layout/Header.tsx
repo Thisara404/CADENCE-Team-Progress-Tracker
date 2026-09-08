@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
-import { LogOut, UserCheck } from 'lucide-react';
 
 interface HeaderProps {
   title?: string;
@@ -12,10 +12,10 @@ interface HeaderProps {
 }
 
 export function Header({ title = 'Cadence', subtitle = 'Weekly reporting & engineering insight' }: HeaderProps) {
-  const { user, isManager, switchUser, logout } = useAuth();
+  const { user, role } = useAuth();
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between min-h-[56px] px-5 bg-[#f3f2f2] border-b-2 border-ink/40">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-[56px] min-h-[56px] max-h-[56px] px-5 bg-[#f3f2f2] border-b-2 border-ink/40 box-border">
       <div className="flex items-center gap-3">
         <div className="flex flex-col">
           <h2 className="text-[15px] font-extrabold tracking-tight text-ink m-0 uppercase">
@@ -27,38 +27,15 @@ export function Header({ title = 'Cadence', subtitle = 'Weekly reporting & engin
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        {/* Role / Session Switcher */}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold tracking-wider uppercase text-slateText-subtle hidden sm:inline-block">
-            Session Role:
+      <div className="flex items-center gap-3 sm:gap-4">
+        {/* Authenticated User Status (Read-Only - Role is strictly based on AUTH) */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10.5px] font-mono font-bold tracking-wider uppercase px-2.5 py-1 bg-white border border-ink/40 text-ink shadow-[1px_1px_0px_rgba(0,0,0,0.15)]">
+            {role ? role.replace('_', ' ') : 'USER'}
           </span>
-          <div className="flex border border-ink/40 bg-white">
-            <button
-              onClick={() => switchUser('alex')}
-              className={`flex items-center gap-1.5 h-[28px] px-2.5 text-[12px] font-bold transition-colors ${
-                !isManager ? 'bg-ink text-[#f3f2f2]' : 'bg-transparent text-ink hover:bg-[#eae9e9]'
-              }`}
-              title="Switch to Alex Chen (Team Member view)"
-            >
-              <span className="w-4 h-4 rounded-none bg-[#2563eb] text-white text-[9px] font-extrabold grid place-items-center">
-                AC
-              </span>
-              <span>Alex (Member)</span>
-            </button>
-            <button
-              onClick={() => switchUser('sarah')}
-              className={`flex items-center gap-1.5 h-[28px] px-2.5 text-[12px] font-bold border-l border-ink/40 transition-colors ${
-                isManager ? 'bg-ink text-[#f3f2f2]' : 'bg-transparent text-ink hover:bg-[#eae9e9]'
-              }`}
-              title="Switch to Sarah Kim (Manager view)"
-            >
-              <span className="w-4 h-4 rounded-none bg-[#ec3013] text-white text-[9px] font-extrabold grid place-items-center">
-                SK
-              </span>
-              <span>Sarah (Manager)</span>
-            </button>
-          </div>
+          <span className="hidden sm:inline text-xs font-bold text-ink truncate max-w-[150px]">
+            {user?.fullName}
+          </span>
         </div>
 
         {/* Current Week Tag */}
@@ -66,11 +43,13 @@ export function Header({ title = 'Cadence', subtitle = 'Weekly reporting & engin
           Week 37
         </div>
 
-        {/* User Badge & Logout */}
-        <div className="flex items-center gap-2 pl-3 border-l border-ink/20">
-          <div
-            className="w-7 h-7 text-white text-[11px] font-extrabold grid place-items-center"
+        {/* User Profile Avatar Link to Settings */}
+        <div className="flex items-center pl-3 border-l border-ink/20">
+          <Link
+            href="/settings"
+            className="w-7 h-7 text-white text-[11px] font-extrabold grid place-items-center hover:opacity-90 transition-opacity border border-ink/30 shadow-[1px_1px_0px_rgba(0,0,0,0.2)]"
             style={{ backgroundColor: user?.avatarColor || '#ec3013' }}
+            title="Profile & Settings"
           >
             {user?.fullName
               ?.split(' ')
@@ -78,14 +57,7 @@ export function Header({ title = 'Cadence', subtitle = 'Weekly reporting & engin
               .join('')
               .slice(0, 2)
               .toUpperCase() || 'U'}
-          </div>
-          <button
-            onClick={logout}
-            className="p-1 text-slateText-secondary hover:text-accent transition-colors"
-            title="Sign out"
-          >
-            <LogOut size={16} />
-          </button>
+          </Link>
         </div>
       </div>
     </header>

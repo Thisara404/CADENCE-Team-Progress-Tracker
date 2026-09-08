@@ -1,34 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { ArrowRight, AlertCircle } from 'lucide-react';
+import { ArrowRight, AlertCircle, Eye, EyeOff, Lock, Shield } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, switchUser } = useAuth();
+  const { login } = useAuth();
 
-  const [email, setEmail] = useState('manager@company.com');
+  const [email, setEmail] = useState('admin@cadence.com');
   const [password, setPassword] = useState('password123');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'manager' | 'member'>('manager');
-
-  const handleQuickPick = (role: 'manager' | 'member') => {
-    setSelectedRole(role);
-    if (role === 'manager') {
-      setEmail('manager@company.com');
-      setPassword('password123');
-      switchUser('sarah');
-    } else {
-      setEmail('alex@company.com');
-      setPassword('password123');
-      switchUser('alex');
-    }
-    setError('');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +26,14 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      router.push(selectedRole === 'manager' ? '/dashboard' : '/reports/new');
+      // Read user from storage to decide redirection
+      const saved = localStorage.getItem('cadence_user');
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (parsed?.role === 'TEAM_MEMBER') {
+        router.push('/reports/new');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check credentials.');
     } finally {
@@ -65,7 +57,7 @@ export default function LoginPage() {
         <div className="max-w-md w-full flex flex-col gap-6 my-auto">
           <div>
             <span className="text-[11px] font-bold tracking-widest uppercase text-slateText-muted">
-              Weekly Reporting
+              Weekly Reporting & Organization Insights
             </span>
             <h1 className="text-3xl sm:text-4xl font-black text-ink tracking-tight mt-1 mb-2">
               Sign in to Cadence
@@ -77,35 +69,34 @@ export default function LoginPage() {
 
           <div className="h-0.5 bg-ink/20" />
 
-          {/* Quick Demo Role Picker */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slateText-subtle">
-              Quick select demo profile:
-            </span>
-            <div className="grid grid-cols-2 border border-ink/40 bg-white">
-              <button
-                type="button"
-                onClick={() => handleQuickPick('manager')}
-                className={`p-2.5 text-left border-r border-ink/40 transition-colors ${
-                  selectedRole === 'manager' ? 'bg-ink text-white font-bold' : 'text-ink hover:bg-[#eae9e9]'
-                }`}
-              >
-                <div className="text-xs font-black">Sarah Kim</div>
-                <div className="text-[10.5px] opacity-75">Manager (Full review access)</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickPick('member')}
-                className={`p-2.5 text-left transition-colors ${
-                  selectedRole === 'member' ? 'bg-ink text-white font-bold' : 'text-ink hover:bg-[#eae9e9]'
-                }`}
-              >
-                <div className="text-xs font-black">Alex Chen</div>
-                <div className="text-[10.5px] opacity-75">Team Member (Report author)</div>
-              </button>
+          {/* Test Credentials Reference in Text */}
+          {/* <div className="p-3.5 bg-white border border-ink/40 text-xs flex flex-col gap-2.5 shadow-[1px_1px_0px_rgba(0,0,0,0.15)]">
+            <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-slateText-subtle text-[10.5px]">
+              <Shield size={13} className="text-accent" />
+              <span>System Test Credentials</span>
             </div>
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+              <div className="p-2.5 bg-[#f8f7f7] border border-ink/20 flex flex-col gap-0.5">
+                <span className="font-bold text-ink uppercase text-[10px] tracking-wider font-sans">
+                  Admin / Manager
+                </span>
+                <span className="text-ink font-semibold select-all break-all">admin@cadence.com</span>
+                <span className="text-slateText-muted text-[10.5px]">
+                  Password: <span className="text-ink font-bold font-mono">password123</span>
+                </span>
+              </div>
+
+              <div className="p-2.5 bg-[#f8f7f7] border border-ink/20 flex flex-col gap-0.5">
+                <span className="font-bold text-ink uppercase text-[10px] tracking-wider font-sans">
+                  Team Member
+                </span>
+                <span className="text-ink font-semibold select-all break-all">alex@company.com</span>
+                <span className="text-slateText-muted text-[10.5px]">
+                  Password: <span className="text-ink font-bold font-mono">password123</span>
+                </span>
+              </div>
+            </div>
+          </div> */}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
@@ -118,7 +109,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
                 required
-                className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-accent"
+                className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-accent font-mono text-ink"
               />
             </div>
 
@@ -126,13 +117,24 @@ export default function LoginPage() {
               <label className="text-xs font-bold uppercase tracking-wider text-ink">
                 Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-accent"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Enter your password"
+                  className="h-10 px-3 pr-10 w-full bg-white border border-ink/40 text-sm focus:border-accent font-mono text-ink"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -152,16 +154,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-xs text-slateText-secondary">
-            Don’t have an account?{' '}
-            <Link href="/register" className="font-bold underline text-ink">
-              Create an account
-            </Link>
-          </p>
+          {/* Notice: No public registration, users created only by admin */}
+          <div className="flex items-center gap-2.5 p-3 bg-[#eae9e9] border border-ink/30 text-[11.5px] text-slateText-secondary">
+            <Lock size={14} className="text-slateText-muted shrink-0" />
+            <span>
+              Self sign-up is disabled. All user accounts must be created directly by an Administrator in the Admin Portal.
+            </span>
+          </div>
         </div>
 
         <p className="text-[11px] text-slateText-muted mt-8">
-          Cadence v1.0.0 — Production Build with PostgreSQL & Prisma.
+          Cadence v1.0.0 — By <a href="https://www.linkedin.com/in/thisaradasun/" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Thisara Dasun</a>
         </p>
       </div>
 

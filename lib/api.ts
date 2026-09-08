@@ -139,6 +139,52 @@ export class ApiClient {
     return this.request<any>(`/users/${id}`);
   }
 
+  static async createUser(data: {
+    fullName: string;
+    email: string;
+    password: string;
+    role?: string;
+    department?: string;
+    title?: string;
+  }) {
+    return this.request<any>('/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async deleteUser(id: string) {
+    return this.request<any>(`/users/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  static async changeUserPassword(id: string, newPassword: string) {
+    return this.request<any>(`/users/${id}/password`, {
+      method: 'PATCH',
+      body: JSON.stringify({ newPassword }),
+    });
+  }
+
+  static async updateProfile(data: {
+    fullName?: string;
+    title?: string;
+    department?: string;
+    avatarColor?: string;
+  }) {
+    return this.request<any>('/users/me/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async changeMyPassword(currentPassword: string, newPassword: string) {
+    return this.request<any>('/users/me/change-password', {
+      method: 'PATCH',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
   static async updateUserRole(id: string, role: string) {
     return this.request<any>(`/users/${id}/role`, {
       method: 'PATCH',

@@ -16,6 +16,7 @@ import {
   MessageSquare,
   ArrowUpRight,
   ExternalLink,
+  X,
 } from 'lucide-react';
 
 export default function ReportDetailPage() {
@@ -26,7 +27,9 @@ export default function ReportDetailPage() {
 
   const [report, setReport] = useState<any>(null);
   const [selectedVersionNum, setSelectedVersionNum] = useState<number>(1);
+  const [showVersionModal, setShowVersionModal] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -35,86 +38,64 @@ export default function ReportDetailPage() {
           setReport(r);
           setSelectedVersionNum(r.currentVersionNumber || 1);
         })
-        .catch(() => {
-          // Fallback mock report
-          setReport({
-            id,
-            weekStartDate: '2026-09-01',
-            weekEndDate: '2026-09-05',
-            status: 'NEEDS_CORRECTION',
-            currentVersionNumber: 1,
-            user: {
-              fullName: 'Dana Lee',
-              email: 'dana@company.com',
-              avatarColor: '#059669',
-              title: 'DevOps / Cloud Engineer',
-            },
-            project: {
-              name: 'Cloud Migration',
-              code: 'CLM-02',
-              description: 'Multi-region AWS EKS Kubernetes migration and container optimization',
-            },
-            versions: [
-              {
-                versionNumber: 1,
-                tasksPlannedNextWeek: 'Set up Terraform configurations for multi-region EKS cluster.',
-                blockers: [
-                  'Staging AWS quota limit reached for c6g.large instances',
-                  'IAM role propagation delay during automated terraform run',
-                ],
-                keyBlockerIndex: 0,
-                achievements: ['Completed Dockerfile optimization, reducing image size by 62%.'],
-                keyAchievementIndex: 0,
-                devHours: 20,
-                testingHours: 10,
-                meetingHours: 4,
-                docHours: 3,
-                notes: 'Quota limit ticket filed with AWS support (ref #9021).',
-                submittedAt: '2026-09-05T17:30:00Z',
-                tasks: [
-                  {
-                    taskName: 'Multi-stage Dockerfile overhaul',
-                    priority: 'HIGH',
-                    status: 'DONE',
-                    plannedPercentage: 100,
-                    actualPercentage: 100,
-                    plannedHours: 12,
-                    spentHours: 11,
-                    deliverableOutput: '',
-                  },
-                  {
-                    taskName: 'EKS cluster Helm charts setup',
-                    priority: 'HIGH',
-                    status: 'IN_PROGRESS',
-                    plannedPercentage: 80,
-                    actualPercentage: 50,
-                    plannedHours: 14,
-                    spentHours: 16,
-                    deliverableOutput: 'Work in branch feat/helm-setup',
-                  },
-                ],
-              },
-            ],
-            reviewComments: [
-              {
-                id: 'rc-1',
-                action: 'REQUESTED_CHANGES',
-                comment:
-                  'Please provide the deliverable PR link for the Dockerfile overhaul and update the EKS Helm chart notes before resubmitting.',
-                createdAt: '2026-09-06T10:15:00Z',
-                reviewer: { fullName: 'Sarah Kim', title: 'Engineering Manager' },
-              },
-            ],
-          });
+        .catch((err) => {
+          console.error('Failed to load report from database:', err);
+          setError('Report not found in database.');
         })
         .finally(() => setIsLoading(false));
     }
   }, [id]);
 
-  if (isLoading || !report) {
+  const renderDeliverableLink = (val?: string) => {
+    if (!val || !val.trim()) {
+      return <span className="text-slateText-muted italic">None provided</span>;
+    }
+    const trimmed = val.trim();
+    const isUrl = /^https?:\/\//i.test(trimmed) || /^(www\.|github\.com|gitlab\.com|bitbucket\.org)/i.test(trimmed);
+    const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+    if (isUrl) {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 font-mono font-bold text-accent hover:text-accent-hover hover:underline transition-colors group cursor-pointer max-w-full"
+          title={`Open ${href} in new tab`}
+        >
+          <span className="truncate">{trimmed}</span>
+          <ExternalLink size={12} className="shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        </a>
+      );
+    }
+
+    return <span className="font-mono text-ink/85 break-all">{trimmed}</span>;
+  };
+
+  if (isLoading) {
     return (
-      <div className="p-8 text-center text-xs font-mono text-slateText-muted">
-        Loading report snapshot...
+      <div className="p-12 text-center text-xs font-mono text-slateText-muted flex flex-col items-center gap-2">
+        <div className="w-6 h-6 border-2 border-accent border-t-transparent animate-spin" />
+        <span>Loading report details from database...</span>
+      </div>
+    );
+  }
+
+  if (error || !report) {
+    return (
+      <div className="p-8 bg-white border-2 border-ink/40 flex flex-col items-center gap-3 text-center my-8 max-w-lg mx-auto">
+        <AlertTriangle size={24} className="text-accent" />
+        <h2 className="text-lg font-black text-ink">Report Not Found</h2>
+        <p className="text-xs text-slateText-secondary">
+          {error || 'Unable to find the requested report in the database.'}
+        </p>
+        <Link
+          href="/reports/history"
+          className="mt-2 px-4 py-2 bg-ink text-white text-xs font-bold hover:bg-black transition-colors"
+        >
+          Return to Report History
+        </Link>
       </div>
     );
   }
@@ -239,36 +220,98 @@ export default function ReportDetailPage() {
 
       {/* Version Timeline Selector */}
       {versions.length > 0 && (
-        <div className="p-4 bg-[#eae9e9] border border-ink/40 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
+        <div className="p-4 bg-[#eae9e9] border border-ink/40 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <History size={16} className="text-ink" />
               <span className="text-xs font-black uppercase tracking-wider text-ink">
                 Version History Timeline
               </span>
+              <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase bg-white border border-ink/30 text-ink">
+                Viewing v{selectedVersionNum}
+              </span>
             </div>
             <span className="text-[11px] text-slateText-secondary">
-              Select a version snapshot to compare revisions and manager review notes.
+              {versions.length > 1
+                ? 'Click any version snapshot button below to compare revisions and inspect audit trail.'
+                : 'Viewing initial submission snapshot (v1). Click below to inspect full version audit.'}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 mt-1">
-            {versions.map((v: any) => (
-              <button
-                key={v.versionNumber}
-                onClick={() => setSelectedVersionNum(v.versionNumber)}
-                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold border transition-colors ${
-                  selectedVersionNum === v.versionNumber
-                    ? 'bg-ink text-white border-ink'
-                    : 'bg-white text-ink border-ink/30 hover:bg-[#f3f2f2]'
-                }`}
-              >
-                <span>Version {v.versionNumber}</span>
-                <span className="text-[10px] opacity-75 font-mono">
-                  ({new Date(v.submittedAt).toLocaleDateString()})
-                </span>
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            {versions.map((v: any) => {
+              const isSelected = Number(selectedVersionNum) === Number(v.versionNumber);
+              const isLatest =
+                Number(v.versionNumber) ===
+                Number(report.currentVersionNumber || versions[versions.length - 1]?.versionNumber);
+
+              return (
+                <button
+                  key={v.versionNumber}
+                  type="button"
+                  onClick={() => {
+                    setSelectedVersionNum(Number(v.versionNumber));
+                    setShowVersionModal(true);
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-ink text-white border-ink shadow-[2px_2px_0px_rgba(0,0,0,0.25)] ring-2 ring-accent/60'
+                      : 'bg-white text-ink border-ink/30 hover:bg-[#f3f2f2]'
+                  }`}
+                  title={`Click to switch to Version ${v.versionNumber} and open snapshot audit`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {isSelected ? (
+                      <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-slateText-muted" />
+                    )}
+                    <span>Version {v.versionNumber}</span>
+                  </span>
+                  <span
+                    className={`text-[10px] font-mono ${
+                      isSelected ? 'text-white/80' : 'text-slateText-muted'
+                    }`}
+                  >
+                    ({new Date(v.submittedAt).toLocaleDateString()})
+                  </span>
+                  {isLatest && (
+                    <span
+                      className={`text-[9px] font-mono uppercase px-1 py-0.2 ${
+                        isSelected ? 'bg-white text-ink font-extrabold' : 'bg-ink/10 text-ink'
+                      }`}
+                    >
+                      Latest
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => setShowVersionModal(true)}
+              className="ml-auto px-2.5 py-1.5 bg-white border border-ink/30 text-ink font-bold text-[11px] hover:bg-ink hover:text-white transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <ExternalLink size={12} />
+              <span>Inspect v{selectedVersionNum} Audit</span>
+            </button>
+          </div>
+
+          {/* Active Version Status Indicator Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-white border-l-4 border-accent text-xs gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-accent" />
+              <span className="font-bold text-ink">
+                Loaded Version {selectedVersionNum} Snapshot
+              </span>
+              <span className="text-slateText-secondary font-mono text-[11px]">
+                (Submitted {new Date(currentVer?.submittedAt).toLocaleString()})
+              </span>
+            </div>
+            <span className="text-[11px] font-mono text-slateText-secondary">
+              {currentVer?.tasks?.length || 0} Tasks · {totalLogged} Hours Logged
+            </span>
           </div>
         </div>
       )}
@@ -366,14 +409,7 @@ export default function ReportDetailPage() {
                   <td className="p-3 font-mono">{t.plannedHours}h</td>
                   <td className="p-3 font-mono font-bold text-accent">{t.spentHours}h</td>
                   <td className="p-3">
-                    {t.deliverableOutput ? (
-                      <span className="flex items-center gap-1 font-mono text-accent truncate">
-                        <span>{t.deliverableOutput}</span>
-                        {t.deliverableOutput.startsWith('http') && <ExternalLink size={12} />}
-                      </span>
-                    ) : (
-                      <span className="text-slateText-muted italic">None provided</span>
-                    )}
+                    {renderDeliverableLink(t.deliverableOutput)}
                   </td>
                 </tr>
               ))}
@@ -474,6 +510,100 @@ export default function ReportDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Version Snapshot Audit Modal */}
+      {showVersionModal && currentVer && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-[#f3f2f2] border-2 border-ink max-w-2xl w-full p-6 flex flex-col gap-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-ink/30 pb-3">
+              <div className="flex items-center gap-2">
+                <History size={18} className="text-accent" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-ink">
+                  Version {currentVer.versionNumber} Snapshot Audit
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVersionModal(false)}
+                className="p-1 hover:bg-[#eae9e9] text-ink cursor-pointer"
+                title="Close modal"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-2.5 bg-white border border-ink/20">
+                <span className="text-[10px] uppercase font-bold text-slateText-muted">Snapshot</span>
+                <div className="text-sm font-black font-mono text-ink">Version {currentVer.versionNumber}</div>
+              </div>
+              <div className="p-2.5 bg-white border border-ink/20">
+                <span className="text-[10px] uppercase font-bold text-slateText-muted">Submitted</span>
+                <div className="text-xs font-mono text-ink">{new Date(currentVer.submittedAt).toLocaleDateString()}</div>
+              </div>
+              <div className="p-2.5 bg-white border border-ink/20">
+                <span className="text-[10px] uppercase font-bold text-slateText-muted">Logged Hours</span>
+                <div className="text-sm font-black font-mono text-accent">{totalLogged}h</div>
+              </div>
+              <div className="p-2.5 bg-white border border-ink/20">
+                <span className="text-[10px] uppercase font-bold text-slateText-muted">Tasks Logged</span>
+                <div className="text-sm font-black font-mono text-ink">{currentVer.tasks?.length || 0}</div>
+              </div>
+            </div>
+
+            {currentVer.notes && (
+              <div className="p-3 bg-white border border-ink/20 text-xs">
+                <span className="font-bold uppercase text-[10px] text-slateText-muted block mb-1">
+                  Submission Notes
+                </span>
+                <p className="text-ink italic leading-relaxed">"{currentVer.notes}"</p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-ink">
+                Tasks in this Version
+              </span>
+              <div className="border border-ink/30 bg-white overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-[#eae9e9] border-b border-ink/30 text-[10.5px] font-black uppercase text-ink">
+                      <th className="p-2">Task</th>
+                      <th className="p-2">Status</th>
+                      <th className="p-2">Plan</th>
+                      <th className="p-2">Actual</th>
+                      <th className="p-2">Deliverable</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-ink/20 font-mono text-[11px]">
+                    {currentVer.tasks?.map((t: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-[#f8f7f7]">
+                        <td className="p-2 font-sans font-semibold text-ink">{t.taskName}</td>
+                        <td className="p-2">{t.status}</td>
+                        <td className="p-2">{t.plannedHours}h ({t.plannedPercentage}%)</td>
+                        <td className="p-2 text-accent font-bold">{t.spentHours}h ({t.actualPercentage}%)</td>
+                        <td className="p-2 truncate max-w-[200px]">
+                          {renderDeliverableLink(t.deliverableOutput)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-ink/20">
+              <button
+                type="button"
+                onClick={() => setShowVersionModal(false)}
+                className="h-9 px-5 bg-ink text-white text-xs font-black uppercase tracking-wider hover:bg-black cursor-pointer"
+              >
+                Close Audit View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

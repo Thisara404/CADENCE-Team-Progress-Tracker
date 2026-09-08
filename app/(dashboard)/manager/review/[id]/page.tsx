@@ -12,6 +12,7 @@ import {
   History,
   Send,
   X,
+  ExternalLink,
   FileCheck,
 } from 'lucide-react';
 
@@ -36,71 +37,40 @@ export default function ManagerReviewPage() {
           const latest = r.versions?.[r.versions.length - 1];
           setSelectedVer(latest);
         })
-        .catch(() => {
-          // Fallback mock report
-          const mock = {
-            id,
-            weekStartDate: '2026-09-08',
-            weekEndDate: '2026-09-12',
-            status: 'SUBMITTED',
-            currentVersionNumber: 1,
-            user: {
-              fullName: 'Marcus Vance',
-              email: 'marcus@company.com',
-              avatarColor: '#7c3aed',
-              title: 'Backend Systems Engineer',
-            },
-            project: {
-              name: 'Internal Tooling',
-              code: 'INT-03',
-            },
-            versions: [
-              {
-                versionNumber: 1,
-                tasksPlannedNextWeek: 'Build GitHub Actions composite step for report validation.',
-                blockers: [
-                  'Shared redis instance memory saturation during high concurrency test runs',
-                  'Flaky mock SMTP server in local test harness',
-                ],
-                keyBlockerIndex: 0,
-                achievements: ['Implemented rate limiter middleware with zero latency penalty.'],
-                keyAchievementIndex: 0,
-                devHours: 25,
-                testingHours: 8,
-                meetingHours: 3,
-                docHours: 3,
-                submittedAt: '2026-09-08T18:00:00Z',
-                tasks: [
-                  {
-                    taskName: 'Sliding window rate-limiter middleware',
-                    priority: 'HIGH',
-                    status: 'DONE',
-                    plannedPercentage: 100,
-                    actualPercentage: 100,
-                    plannedHours: 14,
-                    spentHours: 15,
-                    deliverableOutput: 'https://github.com/org/tooling/pull/88',
-                  },
-                  {
-                    taskName: 'Swagger API documentation generation',
-                    priority: 'MEDIUM',
-                    status: 'DONE',
-                    plannedPercentage: 100,
-                    actualPercentage: 100,
-                    plannedHours: 8,
-                    spentHours: 6,
-                    deliverableOutput: 'https://api.internal.company.com/docs',
-                  },
-                ],
-              },
-            ],
-          };
-          setReport(mock);
-          setSelectedVer(mock.versions[0]);
+        .catch((err) => {
+          console.error('Failed to load review report from database:', err);
+          setError('Failed to load report from database.');
         })
         .finally(() => setIsLoading(false));
     }
   }, [id]);
+
+  const renderDeliverableLink = (val?: string) => {
+    if (!val || !val.trim()) {
+      return <span className="text-slateText-muted italic">None provided</span>;
+    }
+    const trimmed = val.trim();
+    const isUrl = /^https?:\/\//i.test(trimmed) || /^(www\.|github\.com|gitlab\.com|bitbucket\.org)/i.test(trimmed);
+    const href = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+    if (isUrl) {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 font-mono font-bold text-accent hover:text-accent-hover hover:underline transition-colors group cursor-pointer max-w-full"
+          title={`Open ${href} in new tab`}
+        >
+          <span className="truncate">{trimmed}</span>
+          <ExternalLink size={12} className="shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        </a>
+      );
+    }
+
+    return <span className="font-mono text-ink/85 break-all">{trimmed}</span>;
+  };
 
   const handleDecision = async (action: 'APPROVE' | 'REQUEST_CHANGES') => {
     if (action === 'REQUEST_CHANGES' && !feedbackComment.trim()) {
@@ -268,8 +238,8 @@ export default function ManagerReviewPage() {
                   <td className="p-3 font-mono">{t.plannedPercentage}%</td>
                   <td className="p-3 font-mono font-bold">{t.actualPercentage}%</td>
                   <td className="p-3 font-mono font-bold text-accent">{t.spentHours}h</td>
-                  <td className="p-3 font-mono text-accent">
-                    {t.deliverableOutput || <span className="text-slateText-muted italic">None</span>}
+                  <td className="p-3">
+                    {renderDeliverableLink(t.deliverableOutput)}
                   </td>
                 </tr>
               ))}

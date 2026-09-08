@@ -25,54 +25,9 @@ export default function SideBySideBlockersPage() {
         selectedWeek !== 'ALL' ? selectedWeek : undefined,
       );
       setItems(data || []);
-    } catch {
-      // Fallback data
-      setItems([
-        {
-          reportId: 'rep-w37-alex',
-          user: { fullName: 'Alex Chen', avatarColor: '#2563eb' },
-          project: { name: 'Mobile App Redesign', code: 'MAR-01' },
-          status: 'DRAFT',
-          blockers: [
-            'Waiting on backend GraphQL schema update for offline report queueing',
-          ],
-          keyBlockerIndex: 0,
-          achievements: [
-            'Refactored theme tokens to support automated dark mode',
-          ],
-          keyAchievementIndex: 0,
-        },
-        {
-          reportId: 'rep-w37-marcus',
-          user: { fullName: 'Marcus Vance', avatarColor: '#7c3aed' },
-          project: { name: 'Internal Tooling', code: 'INT-03' },
-          status: 'SUBMITTED',
-          blockers: [
-            'Shared redis instance memory saturation during high concurrency test runs',
-            'Flaky mock SMTP server in local test harness',
-          ],
-          keyBlockerIndex: 0,
-          achievements: [
-            'Implemented rate limiter middleware with zero latency penalty',
-          ],
-          keyAchievementIndex: 0,
-        },
-        {
-          reportId: 'rep-w36-dana',
-          user: { fullName: 'Dana Lee', avatarColor: '#059669' },
-          project: { name: 'Cloud Migration', code: 'CLM-02' },
-          status: 'NEEDS_CORRECTION',
-          blockers: [
-            'Staging AWS quota limit reached for c6g.large instances',
-            'IAM role propagation delay during automated terraform run',
-          ],
-          keyBlockerIndex: 0,
-          achievements: [
-            'Completed Dockerfile optimization, reducing image size by 62%',
-          ],
-          keyAchievementIndex: 0,
-        },
-      ]);
+    } catch (err) {
+      console.error('Failed to load blockers/achievements from database:', err);
+      setItems([]);
     } finally {
       setIsLoading(false);
     }

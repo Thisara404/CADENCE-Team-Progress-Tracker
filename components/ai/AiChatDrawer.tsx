@@ -1,37 +1,68 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ApiClient } from '../../lib/api';
-import { Sparkles, X, Send, Bot, User, RefreshCw } from 'lucide-react';
+import { Sparkles, X, Send, Maximize2, Minimize2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 interface ChatMessage {
   id: string;
   sender: 'user' | 'ai';
   text: string;
-  modelUsed?: string;
-  timestamp: string;
+  meta?: string;
+}
+
+// Authentic Claude AI-style Starburst / Asterisk Icon
+function ClaudeBurstIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="2.2" />
+      {/* 8 rounded radiating petals forming the Claude starburst */}
+      <rect x="10.8" y="2.2" width="2.4" height="6.2" rx="1.2" />
+      <rect x="10.8" y="15.6" width="2.4" height="6.2" rx="1.2" />
+      <rect x="2.2" y="10.8" width="6.2" height="2.4" rx="1.2" />
+      <rect x="15.6" y="10.8" width="6.2" height="2.4" rx="1.2" />
+      <rect x="4.8" y="4.8" width="2.4" height="6.2" rx="1.2" transform="rotate(-45 6 7.9)" />
+      <rect x="14.4" y="14.4" width="2.4" height="6.2" rx="1.2" transform="rotate(-45 15.6 17.5)" />
+      <rect x="14.4" y="4.8" width="2.4" height="6.2" rx="1.2" transform="rotate(45 15.6 7.9)" />
+      <rect x="4.8" y="14.4" width="2.4" height="6.2" rx="1.2" transform="rotate(45 6 17.5)" />
+    </svg>
+  );
 }
 
 export function AiChatDrawer() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: '1',
+      id: 'init-1',
       sender: 'ai',
-      text: "👋 Hello! I am the Cadence Executive AI Assistant. Ask me about weekly blockers, team compliance rates, project workload distribution, or individual member deliverables.",
-      modelUsed: 'Cadence Engine (Gemini 1.5 Protocol)',
-      timestamp: 'Now',
+      text: 'I can read every report in this workspace. Ask about open blockers, who is behind on submission, or a project-level summary.',
+      meta: 'CADENCE AI ASSISTANT',
     },
   ]);
 
-  const quickPrompts = [
-    'Summarize recurring blockers across projects',
-    'Give me the weekly team summary',
-    'Check submission compliance rate',
-    'How did Alex Chen perform this week?',
+  const suggestionChips = [
+    'What is blocking the team?',
+    'Summarise W37',
+    'Who is late?',
+    'Where is time going?',
   ];
+
+  useEffect(() => {
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isOpen, isLoading]);
 
   const handleSend = async (textToSend?: string) => {
     const prompt = (textToSend || query).trim();
@@ -41,7 +72,7 @@ export function AiChatDrawer() {
       id: `u-${Date.now()}`,
       sender: 'user',
       text: prompt,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      meta: 'YOU',
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -54,16 +85,15 @@ export function AiChatDrawer() {
         id: `ai-${Date.now()}`,
         sender: 'ai',
         text: res.answer,
-        modelUsed: res.modelUsed,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        meta: res.modelUsed || 'CADENCE AI ASSISTANT',
       };
       setMessages((prev) => [...prev, aiMsg]);
     } catch (err: any) {
       const errorMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: 'ai',
-        text: `Error connecting to AI service: ${err.message || 'Check server status'}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: `Could not reach AI service: ${err.message || 'Please verify connection.'}`,
+        meta: 'CADENCE AI ASSISTANT · ERROR',
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
@@ -72,158 +102,225 @@ export function AiChatDrawer() {
   };
 
   return (
-    <>
-      {/* Floating Trigger Button */}
-      {!isOpen && (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 bg-ink text-[#f3f2f2] px-4 py-3 border-2 border-accent shadow-xl hover:bg-black transition-all group"
-          title="Open AI Engineering Assistant"
-        >
-          <Sparkles size={18} className="text-accent animate-pulse" />
-          <span className="text-xs font-black tracking-wider uppercase">
-            AI Assistant
-          </span>
-        </button>
-      )}
-
-      {/* Slide-out Drawer */}
+    <div className="fixed right-3 sm:right-5 bottom-3 sm:bottom-5 z-50 flex flex-col items-end gap-2.5">
+      {/* Assistant Popup Window */}
       {isOpen && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[460px] bg-[#f3f2f2] border-l-2 border-ink shadow-2xl flex flex-col animate-slide-in-right">
-          {/* Drawer Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-ink text-[#f3f2f2] border-b border-ink">
-            <div className="flex items-center gap-2">
-              <span className="w-5 h-5 bg-accent text-white font-black text-[10px] grid place-items-center">
-                AI
+        <div
+          className={`flex flex-col border-2 border-[#201e1d] bg-[#f3f2f2] shadow-[0_12px_32px_rgba(45,43,43,0.22)] overflow-hidden transition-all duration-200 ease-out ${
+            isExpanded
+              ? 'w-[calc(100vw-24px)] sm:w-[780px] max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] h-[80vh] sm:h-[82vh] max-h-[820px]'
+              : 'w-[calc(100vw-24px)] sm:w-[376px] max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-40px)] h-[500px] sm:h-[520px] max-h-[calc(100vh-100px)]'
+          }`}
+          style={{ animation: 'slideIn 0.2s ease' }}
+        >
+          {/* Header */}
+          <div className="flex items-center gap-2.5 px-3.5 py-3 bg-[#201e1d] text-[#f3f2f2] select-none">
+            {/* Sparkle Red Box */}
+            <div className="w-6 h-6 bg-[#ec3013] flex items-center justify-center shrink-0">
+              <Sparkles size={14} className="text-white fill-white" />
+            </div>
+
+            {/* Title & Grounding Subtitle */}
+            <div className="flex flex-col min-w-0">
+              <span className="text-[12.5px] font-extrabold tracking-[0.08em] uppercase leading-tight truncate">
+                Cadence Assistant
               </span>
-              <div className="flex flex-col">
-                <span className="font-extrabold text-xs tracking-wider uppercase">
-                  Cadence Assistant
-                </span>
-                <span className="text-[10px] text-gray-400">
-                  Powered by Google GenAI (Gemini 1.5)
-                </span>
-              </div>
+              <span className="text-[11px] text-[#bab6b6] leading-tight">
+                Grounded in this week's reports
+              </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() =>
-                  setMessages([
-                    {
-                      id: '1',
-                      sender: 'ai',
-                      text: 'Conversation reset. How can I assist you with this week’s engineering reports?',
-                      timestamp: 'Now',
-                    },
-                  ])
-                }
-                className="p-1 hover:text-accent transition-colors"
-                title="Reset conversation"
-              >
-                <RefreshCw size={14} />
-              </button>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-1 hover:text-accent transition-colors"
-                title="Close drawer"
-              >
-                <X size={18} />
-              </button>
-            </div>
+            <div className="flex-1" />
+
+            {/* Expand / Minimize Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="w-[26px] h-[26px] text-[#f3f2f2] hover:bg-[#444141] flex items-center justify-center transition-colors"
+              title={isExpanded ? 'Collapse to compact view' : 'Full expand'}
+              aria-label={isExpanded ? 'Collapse' : 'Full expand'}
+            >
+              {isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="w-[26px] h-[26px] text-[#f3f2f2] hover:bg-[#444141] flex items-center justify-center transition-colors"
+              title="Close assistant"
+              aria-label="Close assistant"
+            >
+              <X size={16} />
+            </button>
           </div>
 
-          {/* Quick Action Chips */}
-          <div className="p-3 bg-[#eae9e9] border-b border-ink/20 flex flex-wrap gap-1.5">
-            <span className="w-full text-[10px] font-bold uppercase tracking-wider text-slateText-subtle">
-              Suggested queries:
-            </span>
-            {quickPrompts.map((p) => (
-              <button
-                key={p}
-                onClick={() => handleSend(p)}
-                disabled={isLoading}
-                className="text-[11px] bg-white text-ink border border-ink/30 px-2 py-1 hover:border-accent hover:text-accent transition-all text-left truncate max-w-full"
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-
-          {/* Chat Messages Body */}
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+          {/* Messages Body */}
+          <div className="flex-1 overflow-y-auto p-3.5 flex flex-col gap-3">
             {messages.map((m) => (
               <div
                 key={m.id}
-                className={`flex flex-col gap-1 max-w-[90%] ${
-                  m.sender === 'user' ? 'self-end items-end' : 'self-start items-start'
-                }`}
+                className={`flex flex-col ${
+                  m.sender === 'user' ? 'items-end' : 'items-start'
+                } gap-1`}
               >
-                <div className="flex items-center gap-1.5 text-[10px] text-slateText-muted uppercase font-mono">
-                  {m.sender === 'user' ? (
-                    <>
-                      <span>Manager</span>
-                      <User size={10} />
-                    </>
-                  ) : (
-                    <>
-                      <Bot size={10} className="text-accent" />
-                      <span>{m.modelUsed || 'Cadence AI'}</span>
-                    </>
-                  )}
-                  <span>·</span>
-                  <span>{m.timestamp}</span>
-                </div>
+                {m.sender === 'user' ? (
+                  <div className="max-w-[92%] p-[9px_11px] text-[12.5px] leading-[1.6] whitespace-pre-wrap bg-[#201e1d] text-[#f3f2f2]">
+                    {m.text}
+                  </div>
+                ) : (
+                  <div className="max-w-[94%] p-[10px_13px] bg-[#f8f4f4] text-[#201e1d] border-l-2 border-[#ec3013] shadow-sm text-[12.5px]">
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => (
+                          <h1 className="text-[14px] font-extrabold text-[#201e1d] mt-2 mb-1.5 border-b border-[#201e1d]/15 pb-1">
+                            {children}
+                          </h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className="text-[13.5px] font-bold text-[#201e1d] mt-2 mb-1">
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="text-[13px] font-bold text-[#201e1d] mt-1.5 mb-1">
+                            {children}
+                          </h3>
+                        ),
+                        h4: ({ children }) => (
+                          <h4 className="text-[12.5px] font-bold text-[#201e1d] mt-1 mb-0.5">
+                            {children}
+                          </h4>
+                        ),
+                        p: ({ children }) => (
+                          <p className="my-1.5 first:mt-0 last:mb-0 leading-[1.6] text-[#201e1d]">
+                            {children}
+                          </p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="list-disc pl-4 my-1.5 space-y-1">
+                            {children}
+                          </ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal pl-4 my-1.5 space-y-1">
+                            {children}
+                          </ol>
+                        ),
+                        li: ({ children }) => (
+                          <li className="leading-[1.55] my-0.5 text-[#201e1d]">
+                            {children}
+                          </li>
+                        ),
+                        strong: ({ children }) => (
+                          <strong className="font-bold text-[#111010]">
+                            {children}
+                          </strong>
+                        ),
+                        code: ({ children }) => (
+                          <code className="px-1 py-0.5 bg-[#eae7e7] text-[#201e1d] font-mono text-[11px] border border-[#201e1d]/15">
+                            {children}
+                          </code>
+                        ),
+                        pre: ({ children }) => (
+                          <pre className="p-2 bg-[#201e1d] text-[#f3f2f2] font-mono text-[11px] overflow-x-auto my-1.5">
+                            {children}
+                          </pre>
+                        ),
+                        hr: () => (
+                          <hr className="border-t border-[#201e1d]/15 my-2" />
+                        ),
+                      }}
+                    >
+                      {m.text}
+                    </ReactMarkdown>
+                  </div>
+                )}
 
-                <div
-                  className={`p-3 text-[13px] leading-relaxed border whitespace-pre-wrap ${
-                    m.sender === 'user'
-                      ? 'bg-ink text-[#f3f2f2] border-ink'
-                      : 'bg-white text-ink border-ink/30 shadow-sm'
-                  }`}
-                >
-                  {m.text}
-                </div>
+                {m.meta && (
+                  <span className="text-[10px] font-semibold tracking-[0.08em] uppercase text-[#9b9797]">
+                    {m.meta}
+                  </span>
+                )}
               </div>
             ))}
 
+            {/* Claude AI-Style Loading Animation */}
             {isLoading && (
-              <div className="self-start flex items-center gap-2 p-3 bg-white border border-ink/30 text-xs text-slateText-secondary font-mono">
-                <Sparkles size={14} className="text-accent animate-spin" />
-                <span>Analyzing reports and generating answer...</span>
+              <div className="flex flex-col items-start gap-1">
+                <div className="max-w-[94%] p-[10px_13px] bg-[#f8f4f4] border-l-2 border-[#ec3013] text-[#201e1d] shadow-sm flex items-center gap-3">
+                  {/* Claude Breathing Starburst */}
+                  <div className="text-[#ec3013] shrink-0 animate-[claude-breathe_2.6s_ease-in-out_infinite]">
+                    <ClaudeBurstIcon className="w-5 h-5 text-[#ec3013]" />
+                  </div>
+
+                  <p className="text-[12.5px] leading-snug text-[#201e1d] font-medium">
+                    Cadence is responding in the background. Once it's complete, you'll see it here.
+                  </p>
+                </div>
+
+                <span className="text-[10px] font-semibold tracking-[0.08em] uppercase text-[#9b9797]">
+                  CADENCE AI ASSISTANT
+                </span>
               </div>
             )}
+
+            <div ref={messagesEndRef} />
           </div>
 
-          {/* Chat Input Bar */}
-          <div className="p-3 bg-[#eae9e9] border-t-2 border-ink/40">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSend();
-              }}
-              className="flex items-center gap-2"
-            >
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ask about blockers, compliance, or team hours..."
-                disabled={isLoading}
-                className="flex-1 h-9 px-3 bg-white border border-ink/40 text-xs focus:border-accent text-ink"
-              />
+          {/* Quick Action Suggestion Chips */}
+          <div className="flex flex-wrap gap-1.5 px-3.5 pb-2.5">
+            {suggestionChips.map((chip) => (
               <button
-                type="submit"
-                disabled={isLoading || !query.trim()}
-                className="h-9 px-4 bg-accent text-white font-bold text-xs flex items-center gap-1.5 hover:bg-accent-hover disabled:opacity-50 transition-colors"
+                key={chip}
+                type="button"
+                onClick={() => handleSend(chip)}
+                disabled={isLoading}
+                className="h-7 px-2.5 border border-[#201e1d]/40 bg-white/70 text-[11px] font-medium text-[#444141] hover:bg-[#eae7e7] hover:text-[#201e1d] transition-colors disabled:opacity-50 whitespace-nowrap"
               >
-                <Send size={13} />
-                <span>Ask</span>
+                {chip}
               </button>
-            </form>
+            ))}
           </div>
+
+          {/* Input Bar */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
+            className="flex items-center gap-2 p-[11px_12px] border-t-2 border-[#201e1d]/30 bg-[#f3f2f2]"
+          >
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask about blockers, velocity, compliance…"
+              disabled={isLoading}
+              className="flex-1 min-w-0 h-[34px] px-2.5 bg-[#f8f4f4] border border-[#201e1d]/40 text-[12.5px] text-[#201e1d] placeholder:text-[#7d7979] focus:outline-none focus:border-[#201e1d]"
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !query.trim()}
+              className="w-[34px] h-[34px] bg-[#ec3013] text-[#f3f2f2] flex items-center justify-center shrink-0 hover:bg-[#d4270e] transition-colors disabled:opacity-50 cursor-pointer"
+              title="Send message"
+              aria-label="Send"
+            >
+              <Send size={15} />
+            </button>
+          </form>
         </div>
       )}
-    </>
+
+      {/* Floating Toggle Button */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 sm:gap-2.5 h-[40px] sm:h-[44px] px-3.5 sm:px-4 bg-[#201e1d] text-[#f3f2f2] text-xs sm:text-[13px] font-extrabold shadow-[0_3px_10px_rgba(45,43,43,0.16)] hover:bg-[#2e2a29] transition-colors cursor-pointer shrink-0"
+      >
+        <Sparkles size={16} className="text-[#ec3013]" />
+        <span>{isOpen ? 'Close assistant' : 'Ask the assistant'}</span>
+      </button>
+    </div>
   );
 }

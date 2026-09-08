@@ -3,39 +3,57 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Role } from '../lib/types';
 import { ApiClient } from '../lib/api';
-import { MOCK_USERS } from '../lib/mock-data';
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   role: Role;
+  isAdmin: boolean;
   isManager: boolean;
   isLoading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => void;
-  switchUser: (key: 'alex' | 'sarah' | 'dana' | 'marcus') => void;
+  updateUserLocal: (updated: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Default demo user: Alex Chen (Team Member)
-  const [user, setUser] = useState<User | null>(MOCK_USERS[1]);
+  const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('cadence_token');
-    const savedUser = localStorage.getItem('cadence_user');
-    if (savedToken && savedUser) {
+    const initAuth = async () => {
       try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
+        const savedToken = localStorage.getItem('cadence_token');
+        const savedUser = localStorage.getItem('cadence_user');
+        if (savedToken) {
+          setToken(savedToken);
+          if (savedUser) {
+            try {
+              setUser(JSON.parse(savedUser));
+            } catch {
+              // ignore JSON parse error
+            }
+          }
+          // Validate and refresh with live backend database
+          const me = await ApiClient.getMe();
+          if (me) {
+            setUser(me);
+            localStorage.setItem('cadence_user', JSON.stringify(me));
+          }
+        }
       } catch {
-        // use default mock
+        // Expired or invalid token
+        logout();
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+
+    initAuth();
   }, []);
 
   const login = async (email: string, pass: string) => {
@@ -47,15 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('cadence_token', res.accessToken);
       localStorage.setItem('cadence_user', JSON.stringify(res.user));
     } catch (err: any) {
-      // If server is not yet running, use local mock user
-      const matched = MOCK_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase());
-      if (matched) {
-        setUser(matched);
-        setToken('mock-jwt-token');
-        localStorage.setItem('cadence_user', JSON.stringify(matched));
-      } else {
-        throw err;
-      }
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -69,21 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(res.accessToken);
       localStorage.setItem('cadence_token', res.accessToken);
       localStorage.setItem('cadence_user', JSON.stringify(res.user));
-    } catch (err) {
-      // Mock register
-      const newUser: User = {
-        id: `u-${Date.now()}`,
-        fullName: data.fullName,
-        email: data.email,
-        role: data.role || 'TEAM_MEMBER',
-        department: data.department || 'Engineering',
-        title: data.role === 'MANAGER' ? 'Engineering Manager' : 'Software Engineer',
-        avatarColor: '#ec3013',
-        active: true,
-      };
-      setUser(newUser);
-      setToken('mock-jwt-token');
-      localStorage.setItem('cadence_user', JSON.stringify(newUser));
+    } catch (err: any) {
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -96,21 +93,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('cadence_user');
   };
 
-  // Header switcher between roles for live demos
-  const switchUser = (key: 'alex' | 'sarah' | 'dana' | 'marcus') => {
-    const userMap: Record<string, User> = {
-      alex: MOCK_USERS[1],
-      sarah: MOCK_USERS[0],
-      dana: MOCK_USERS[2],
-      marcus: MOCK_USERS[3],
-    };
-    const target = userMap[key] || MOCK_USERS[1];
-    setUser(target);
-    localStorage.setItem('cadence_user', JSON.stringify(target));
+  const updateUserLocal = (updated: Partial<User>) => {
+    if (!user) return;
+    const merged = { ...user, ...updated };
+    setUser(merged);
+    localStorage.setItem('cadence_user', JSON.stringify(merged));
   };
 
-  const role = user?.role || 'TEAM_MEMBER';
-  const isManager = role === 'MANAGER' || role === 'ADMIN';
+  // Manager and Admin are unified into one role: ADMIN
+  const rawRole = user?.role || 'TEAM_MEMBER';
+  const role: Role = (rawRole === 'MANAGER' ? 'ADMIN' : rawRole) as Role;
+  const isAdmin = role === 'ADMIN';
+  const isManager = role === 'ADMIN';
 
   return (
     <AuthContext.Provider
@@ -118,12 +112,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         role,
+        isAdmin,
         isManager,
         isLoading,
         login,
         register,
         logout,
-        switchUser,
+        updateUserLocal,
       }}
     >
       {children}

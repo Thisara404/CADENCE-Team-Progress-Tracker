@@ -23,84 +23,43 @@ export default function MemberProfilePage() {
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (id) {
       ApiClient.getUserProfile(id)
         .then((data) => setProfile(data))
-        .catch(() => {
-          // Fallback mock profile
-          setProfile({
-            user: {
-              id,
-              fullName: 'Alex Chen',
-              email: 'alex@company.com',
-              role: 'TEAM_MEMBER',
-              department: 'Frontend Engineering',
-              title: 'Senior Frontend Engineer',
-              avatarColor: '#2563eb',
-            },
-            stats: {
-              totalReports: 4,
-              onTimeRate: 100,
-              avgCompletion: 92,
-              totalHours: 145,
-            },
-            blockers: [
-              {
-                text: 'Waiting on backend GraphQL schema update for offline report queueing',
-                isKey: true,
-                weekStartDate: '2026-09-08',
-                projectName: 'Mobile App Redesign',
-              },
-              {
-                text: 'iOS simulator certificate renewal delay',
-                isKey: false,
-                weekStartDate: '2026-08-25',
-                projectName: 'Mobile App Redesign',
-              },
-            ],
-            reports: [
-              {
-                id: 'rep-w37',
-                weekStartDate: '2026-09-08',
-                weekEndDate: '2026-09-12',
-                project: { name: 'Mobile App Redesign' },
-                status: 'DRAFT',
-                currentVersionNumber: 1,
-                completion: 60,
-                hours: 24,
-              },
-              {
-                id: 'rep-w35',
-                weekStartDate: '2026-08-25',
-                weekEndDate: '2026-08-29',
-                project: { name: 'Mobile App Redesign' },
-                status: 'APPROVED',
-                currentVersionNumber: 1,
-                completion: 100,
-                hours: 40,
-              },
-              {
-                id: 'rep-w34',
-                weekStartDate: '2026-08-18',
-                weekEndDate: '2026-08-22',
-                project: { name: 'Mobile App Redesign' },
-                status: 'APPROVED',
-                currentVersionNumber: 1,
-                completion: 100,
-                hours: 42,
-              },
-            ],
-          });
+        .catch((err) => {
+          console.error('Failed to load user profile from database:', err);
+          setError('Member profile not found in database.');
         })
         .finally(() => setIsLoading(false));
     }
   }, [id]);
 
-  if (isLoading || !profile) {
+  if (isLoading) {
     return (
-      <div className="p-8 text-center text-xs font-mono text-slateText-muted">
-        Loading member performance profile...
+      <div className="p-12 text-center text-xs font-mono text-slateText-muted flex flex-col items-center gap-2">
+        <div className="w-6 h-6 border-2 border-accent border-t-transparent animate-spin" />
+        <span>Loading member performance profile...</span>
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="p-8 bg-white border-2 border-ink/40 flex flex-col items-center gap-3 text-center my-8 max-w-lg mx-auto">
+        <AlertTriangle size={24} className="text-accent" />
+        <h2 className="text-lg font-black text-ink">Member Not Found</h2>
+        <p className="text-xs text-slateText-secondary">
+          {error || 'Unable to find member details in database.'}
+        </p>
+        <button
+          onClick={() => router.back()}
+          className="mt-2 px-4 py-2 bg-ink text-white text-xs font-bold hover:bg-black transition-colors"
+        >
+          Go Back
+        </button>
       </div>
     );
   }

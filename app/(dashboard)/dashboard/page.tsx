@@ -4,12 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { ApiClient } from '@/lib/api';
-import {
-  MOCK_DASHBOARD_SUMMARY,
-  MOCK_DASHBOARD_CHARTS,
-  MOCK_PROJECTS,
-  MOCK_USERS,
-} from '@/lib/mock-data';
+import { useRouter } from 'next/navigation';
+import { DashboardSummary, DashboardCharts } from '@/lib/types';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -23,13 +19,31 @@ import {
   Calendar,
 } from 'lucide-react';
 
+const emptySummary: DashboardSummary = {
+  totalMembers: 0,
+  totalSubmitted: 0,
+  pendingReviews: 0,
+  needsCorrectionCount: 0,
+  approvedCount: 0,
+  complianceRate: 0,
+  openBlockers: 0,
+};
+
+const emptyCharts: DashboardCharts = {
+  velocityTrend: [],
+  statusByMember: [],
+  projectWorkload: [],
+  timeBreakdown: [],
+};
+
 export default function DashboardPage() {
+  const router = useRouter();
   const { user, isManager } = useAuth();
 
-  const [summary, setSummary] = useState(MOCK_DASHBOARD_SUMMARY);
-  const [charts, setCharts] = useState(MOCK_DASHBOARD_CHARTS);
-  const [projects, setProjects] = useState<any[]>(MOCK_PROJECTS);
-  const [members, setMembers] = useState<any[]>(MOCK_USERS.filter((u) => u.role === 'TEAM_MEMBER'));
+  const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
+  const [charts, setCharts] = useState<DashboardCharts>(emptyCharts);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
   const [recentReports, setRecentReports] = useState<any[]>([]);
 
   // Filter states
@@ -41,7 +55,7 @@ export default function DashboardPage() {
   const loadDashboard = async () => {
     setIsLoading(true);
     try {
-      const [sumRes, chartsRes, projsRes, repsRes] = await Promise.all([
+      const [sumRes, chartsRes, projsRes, repsRes, usersRes] = await Promise.all([
         ApiClient.getDashboardSummary(selectedWeek !== 'ALL' ? selectedWeek : undefined),
         ApiClient.getDashboardCharts(),
         ApiClient.getProjects(),
@@ -50,46 +64,18 @@ export default function DashboardPage() {
           projectId: selectedProject !== 'ALL' ? selectedProject : undefined,
           memberId: selectedMember !== 'ALL' ? selectedMember : undefined,
         }),
+        ApiClient.getUsers().catch(() => []),
       ]);
 
       if (sumRes) setSummary(sumRes);
       if (chartsRes) setCharts(chartsRes);
       if (projsRes && projsRes.length) setProjects(projsRes);
       if (repsRes?.reports) setRecentReports(repsRes.reports);
+      if (usersRes && usersRes.length) {
+        setMembers(usersRes.filter((u: any) => u.role === 'TEAM_MEMBER'));
+      }
     } catch (err) {
-      // Use rich mock data if offline
-      setSummary(MOCK_DASHBOARD_SUMMARY);
-      setCharts(MOCK_DASHBOARD_CHARTS);
-      setRecentReports([
-        {
-          id: 'rep-w37',
-          status: 'SUBMITTED',
-          project: { name: 'Internal Tooling', code: 'INT-03' },
-          user: { fullName: 'Marcus Vance', avatarColor: '#7c3aed' },
-          totalHours: 39,
-          completionRate: 85,
-          weekStartDate: '2026-09-08',
-        },
-        {
-          id: 'rep-w36',
-          status: 'NEEDS_CORRECTION',
-          project: { name: 'Cloud Migration', code: 'CLM-02' },
-          user: { fullName: 'Dana Lee', avatarColor: '#059669' },
-          totalHours: 37,
-          completionRate: 75,
-          weekStartDate: '2026-09-01',
-          latestComment: { comment: 'Please attach PR link for Dockerfile overhaul.' },
-        },
-        {
-          id: 'rep-w35',
-          status: 'APPROVED',
-          project: { name: 'Mobile App Redesign', code: 'MAR-01' },
-          user: { fullName: 'Alex Chen', avatarColor: '#2563eb' },
-          totalHours: 40,
-          completionRate: 100,
-          weekStartDate: '2026-08-25',
-        },
-      ]);
+      console.error('Failed to load dashboard data from database:', err);
     } finally {
       setIsLoading(false);
     }
@@ -112,7 +98,7 @@ export default function DashboardPage() {
       value: `${summary.complianceRate}%`,
       delta: `${summary.totalSubmitted} of ${summary.totalMembers} in`,
       barColor: '#ec3013',
-      barWidth: `${summary.complianceRate}%`,
+      barWidth: `${Math.min(100, Math.max(0, summary.complianceRate))}%`,
       sub: 'Team submission adherence this week',
     },
     {
@@ -120,7 +106,7 @@ export default function DashboardPage() {
       value: summary.totalSubmitted,
       delta: `${summary.pendingReviews} awaiting review`,
       barColor: '#201e1d',
-      barWidth: `${Math.min(100, (summary.totalSubmitted / (summary.totalMembers || 1)) * 100)}%`,
+      barWidth: `${Math.min(100, Math.max(0, (summary.totalSubmitted / (summary.totalMembers || 1)) * 100))}%`,
       sub: 'Current cycle active reports',
     },
     {
@@ -136,7 +122,7 @@ export default function DashboardPage() {
       value: summary.openBlockers,
       delta: 'Across all project tracks',
       barColor: '#dc2626',
-      barWidth: `${Math.min(100, summary.openBlockers * 25)}%`,
+      barWidth: `${Math.min(100, Math.max(0, summary.openBlockers * 25))}%`,
       sub: 'Dependencies & environment halts',
     },
   ];
@@ -251,9 +237,9 @@ export default function DashboardPage() {
                 {c.delta}
               </span>
             </div>
-            <div className="h-1.5 w-full bg-[#eae9e9] mt-1">
+            <div className="h-1.5 w-full bg-[#eae9e9] mt-1 overflow-hidden">
               <div
-                className="h-full transition-all duration-500"
+                className="h-full transition-all duration-500 max-w-full"
                 style={{ width: c.barWidth, backgroundColor: c.barColor }}
               />
             </div>
@@ -264,9 +250,9 @@ export default function DashboardPage() {
 
       {/* Visual Insights Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart 1: Task Completion Velocity Trend */}
-        <div className="p-5 bg-white border-2 border-ink/40 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+        {/* Chart 1: Task Completion Velocity Trend (Line Graph) */}
+        <div className="p-5 bg-white border-2 border-ink/40 flex flex-col gap-3 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-black uppercase tracking-wider text-ink flex items-center gap-1.5">
                 <TrendingUp size={15} className="text-accent" />
@@ -277,88 +263,210 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            <div className="flex items-center gap-3 text-[11px] font-mono">
-              <span className="flex items-center gap-1 text-ink font-bold">
-                <span className="w-3 h-3 bg-accent inline-block" /> Completed
+            <div className="flex items-center gap-3 text-[11px] font-mono shrink-0">
+              <span className="flex items-center gap-1.5 text-ink font-bold">
+                <span className="flex items-center">
+                  <span className="w-3.5 h-[2px] bg-accent inline-block" />
+                  <span className="w-2 h-2 rounded-full bg-accent inline-block -ml-1" />
+                </span>
+                Completed
               </span>
-              <span className="flex items-center gap-1 text-slateText-secondary">
-                <span className="w-3 h-3 bg-[#bab6b6] inline-block" /> Planned
+              <span className="flex items-center gap-1.5 text-slateText-secondary">
+                <span className="flex items-center">
+                  <span className="w-3.5 h-[2px] border-t-2 border-dashed border-[#7d7979] inline-block" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#7d7979] inline-block -ml-1" />
+                </span>
+                Planned
               </span>
             </div>
           </div>
 
-          {/* SVG Velocity Bar Chart */}
-          <div className="h-52 w-full pt-4">
-            <svg viewBox="0 0 500 180" className="w-full h-full overflow-visible">
-              {charts.velocityTrend.map((v, i) => {
-                const x = 50 + i * 110;
-                const plannedH = Math.min(130, v.plannedTasks * 14);
-                const actualH = Math.min(130, v.completedTasks * 14);
+          {/* SVG Velocity Line Graph */}
+          <div className="h-52 w-full pt-2 overflow-hidden">
+            {(() => {
+              const data = charts.velocityTrend || [];
+              const maxTasks = Math.max(
+                4,
+                ...data.map((d) => Math.max(d.plannedTasks || 0, d.completedTasks || 0))
+              );
+              // Headroom so data points never touch top border
+              const yMax = Math.ceil(maxTasks * 1.25);
+              const chartW = 500;
+              const chartH = 175;
+              const padLeft = 42;
+              const padRight = 36;
+              const padTop = 22;
+              const padBottom = 32;
+              const plotW = chartW - padLeft - padRight;
+              const plotH = chartH - padTop - padBottom;
+              const baseY = padTop + plotH;
 
-                return (
-                  <g key={v.weekLabel}>
-                    {/* Grid line */}
-                    <line x1="30" y1="140" x2="470" y2="140" stroke="#d7d3d3" strokeWidth="1" />
+              const getX = (i: number) => {
+                if (data.length <= 1) return padLeft + plotW / 2;
+                return padLeft + (i / (data.length - 1)) * plotW;
+              };
 
-                    {/* Planned Bar */}
-                    <rect
-                      x={x}
-                      y={140 - plannedH}
-                      width="28"
-                      height={plannedH}
-                      fill="#eae9e9"
-                      stroke="#bab6b6"
-                      strokeWidth="1"
+              const getY = (val: number) => {
+                return baseY - (val / yMax) * plotH;
+              };
+
+              const plannedPolyline = data
+                .map((d, i) => `${getX(i)},${getY(d.plannedTasks || 0)}`)
+                .join(' ');
+
+              const completedPolyline = data
+                .map((d, i) => `${getX(i)},${getY(d.completedTasks || 0)}`)
+                .join(' ');
+
+              const completedArea =
+                data.length > 0
+                  ? `M ${getX(0)} ${baseY} ` +
+                    data.map((d, i) => `L ${getX(i)} ${getY(d.completedTasks || 0)}`).join(' ') +
+                    ` L ${getX(data.length - 1)} ${baseY} Z`
+                  : '';
+
+              const gridRows = [0, 0.33, 0.66, 1].map((pct) => {
+                const val = Math.round(yMax * pct);
+                const y = baseY - pct * plotH;
+                return { val, y };
+              });
+
+              return (
+                <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-full">
+                  <defs>
+                    <linearGradient id="completedGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ec3013" stopOpacity="0.22" />
+                      <stop offset="100%" stopColor="#ec3013" stopOpacity="0.01" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Horizontal Gridlines & Y-Axis Scale Labels */}
+                  {gridRows.map((g, idx) => (
+                    <g key={idx}>
+                      <line
+                        x1={padLeft - 8}
+                        y1={g.y}
+                        x2={chartW - padRight + 12}
+                        y2={g.y}
+                        stroke="#eae7e7"
+                        strokeWidth="1"
+                        strokeDasharray={idx === 0 ? 'none' : '3 3'}
+                      />
+                      <text
+                        x={padLeft - 14}
+                        y={g.y + 3}
+                        fontSize="9.5"
+                        fill="#9b9797"
+                        fontFamily="monospace"
+                        textAnchor="end"
+                      >
+                        {g.val}
+                      </text>
+                    </g>
+                  ))}
+
+                  {/* Shaded Area under Completed Line */}
+                  {completedArea && <path d={completedArea} fill="url(#completedGrad)" />}
+
+                  {/* Planned Tasks Line (Dashed Neutral Slate) */}
+                  {plannedPolyline && (
+                    <polyline
+                      points={plannedPolyline}
+                      fill="none"
+                      stroke="#8a8585"
+                      strokeWidth="2"
+                      strokeDasharray="4 3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     />
+                  )}
 
-                    {/* Completed Bar */}
-                    <rect
-                      x={x + 32}
-                      y={140 - actualH}
-                      width="28"
-                      height={actualH}
-                      fill="#ec3013"
+                  {/* Completed Tasks Line (Solid Accent Red) */}
+                  {completedPolyline && (
+                    <polyline
+                      points={completedPolyline}
+                      fill="none"
+                      stroke="#ec3013"
+                      strokeWidth="2.75"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     />
+                  )}
 
-                    {/* Value text */}
-                    <text
-                      x={x + 14}
-                      y={135 - plannedH}
-                      textAnchor="middle"
-                      fontSize="10"
-                      fill="#7d7979"
-                      fontFamily="monospace"
-                    >
-                      {v.plannedTasks}
-                    </text>
-                    <text
-                      x={x + 46}
-                      y={135 - actualH}
-                      textAnchor="middle"
-                      fontSize="10"
-                      fontWeight="bold"
-                      fill="#201e1d"
-                      fontFamily="monospace"
-                    >
-                      {v.completedTasks}
-                    </text>
+                  {/* Data Points and Labels */}
+                  {data.map((d, i) => {
+                    const x = getX(i);
+                    const yPlan = getY(d.plannedTasks || 0);
+                    const yComp = getY(d.completedTasks || 0);
 
-                    {/* X-axis label */}
-                    <text
-                      x={x + 30}
-                      y="160"
-                      textAnchor="middle"
-                      fontSize="11"
-                      fontWeight="bold"
-                      fill="#201e1d"
-                      fontFamily="monospace"
-                    >
-                      {v.weekLabel}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
+                    // Dynamic label positioning so numbers don't collide
+                    const isClose = Math.abs(yPlan - yComp) < 16;
+                    const planTextY = isClose && yPlan >= yComp ? yPlan + 12 : yPlan - 7;
+                    const compTextY = isClose && yComp > yPlan ? yComp + 12 : yComp - 7;
+
+                    return (
+                      <g key={d.weekLabel}>
+                        {/* Planned Data Dot */}
+                        <circle
+                          cx={x}
+                          cy={yPlan}
+                          r="3.5"
+                          fill="#ffffff"
+                          stroke="#7d7979"
+                          strokeWidth="1.75"
+                        />
+                        <text
+                          x={x}
+                          y={planTextY}
+                          textAnchor="middle"
+                          fontSize="9.5"
+                          fill="#7d7979"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                        >
+                          {d.plannedTasks}
+                        </text>
+
+                        {/* Completed Glow & Data Dot */}
+                        <circle cx={x} cy={yComp} r="6" fill="#ec3013" fillOpacity="0.16" />
+                        <circle
+                          cx={x}
+                          cy={yComp}
+                          r="4"
+                          fill="#ec3013"
+                          stroke="#ffffff"
+                          strokeWidth="1.75"
+                        />
+                        <text
+                          x={x}
+                          y={compTextY}
+                          textAnchor="middle"
+                          fontSize="10"
+                          fontWeight="black"
+                          fill="#ec3013"
+                          fontFamily="monospace"
+                        >
+                          {d.completedTasks}
+                        </text>
+
+                        {/* X-axis Week Label */}
+                        <text
+                          x={x}
+                          y={baseY + 18}
+                          textAnchor="middle"
+                          fontSize="11"
+                          fontWeight="bold"
+                          fill="#201e1d"
+                          fontFamily="monospace"
+                        >
+                          {d.weekLabel}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              );
+            })()}
           </div>
         </div>
 
@@ -467,10 +575,10 @@ export default function DashboardPage() {
                       {p.hours}h ({p.reportCount} reports)
                     </span>
                   </div>
-                  <div className="h-4 w-full bg-[#eae9e9] border border-ink/20">
+                  <div className="h-4 w-full bg-[#eae9e9] border border-ink/20 overflow-hidden">
                     <div
-                      className="h-full bg-ink transition-all duration-500"
-                      style={{ width: `${widthPct}%` }}
+                      className="h-full bg-ink transition-all duration-500 max-w-full"
+                      style={{ width: `${Math.min(100, Math.max(0, widthPct))}%` }}
                     />
                   </div>
                 </div>
@@ -484,10 +592,10 @@ export default function DashboardPage() {
           <div>
             <h3 className="text-sm font-black uppercase tracking-wider text-ink flex items-center gap-1.5">
               <PieIcon size={15} className="text-accent" />
-              <span>Hours by Task Category</span>
+              <span>Time Spent by Category</span>
             </h3>
             <span className="text-[11px] text-slateText-secondary">
-              Organization-wide engineering capacity distribution
+              Breakdown of total engineering hours across key activities
             </span>
           </div>
 
@@ -543,7 +651,7 @@ export default function DashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-[#eae9e9] border-b-2 border-ink/40 text-[11px] font-black uppercase tracking-wider text-ink">
+                <tr className="bg-[#eae9e9] border-b-2 border-ink/40 text-[11px] font-black uppercase tracking-wider text-ink whitespace-nowrap">
                   <th className="p-3">Team Member</th>
                   <th className="p-3">Project</th>
                   <th className="p-3">Status</th>
@@ -555,8 +663,17 @@ export default function DashboardPage() {
               </thead>
               <tbody className="divide-y divide-ink/20">
                 {recentReports.slice(0, 5).map((r) => (
-                  <tr key={r.id} className="hover:bg-[#f8f7f7]">
-                    <td className="p-3">
+                  <tr
+                    key={r.id}
+                    onClick={(e) => {
+                      const el = e.target as HTMLElement;
+                      if (el.closest('a') || el.closest('button')) return;
+                      router.push(`/reports/${r.id}`);
+                    }}
+                    className="hover:bg-[#eae9e9] transition-colors cursor-pointer"
+                    title="Click to view report details"
+                  >
+                    <td className="p-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <span
                           className="w-5 h-5 text-white text-[10px] font-black grid place-items-center"
@@ -568,11 +685,15 @@ export default function DashboardPage() {
                       </div>
                     </td>
 
-                    <td className="p-3 font-mono">{r.project?.name}</td>
+                    <td className="p-3 font-mono whitespace-nowrap">
+                      <span className="inline-block px-2 py-0.5 bg-[#f3f2f2] border border-ink/30 text-[11px]">
+                        {r.project?.name}
+                      </span>
+                    </td>
 
-                    <td className="p-3">
+                    <td className="p-3 whitespace-nowrap">
                       <span
-                        className={`px-2 py-0.5 text-[10px] font-black uppercase border ${
+                        className={`inline-block px-2 py-0.5 text-[10px] font-black uppercase border whitespace-nowrap ${
                           r.status === 'APPROVED'
                             ? 'bg-[#dcfce7] text-[#166534] border-[#166534]'
                             : r.status === 'SUBMITTED'
@@ -586,8 +707,8 @@ export default function DashboardPage() {
                       </span>
                     </td>
 
-                    <td className="p-3 font-mono font-bold text-accent">{r.totalHours}h</td>
-                    <td className="p-3 font-mono">{r.completionRate}%</td>
+                    <td className="p-3 font-mono font-bold text-accent whitespace-nowrap">{r.totalHours}h</td>
+                    <td className="p-3 font-mono whitespace-nowrap">{r.completionRate}%</td>
 
                     <td className="p-3 max-w-xs truncate text-slateText-secondary italic">
                       {r.latestComment ? `"${r.latestComment.comment}"` : '—'}

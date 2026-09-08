@@ -70,3 +70,35 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #7d7979;
 }
+
+/* Claude AI-style Starburst/Sunburst loading animations */
+@keyframes claude-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes claude-breathe {
+  0%, 100% {
+    transform: scale(0.94) rotate(0deg);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.08) rotate(180deg);
+    opacity: 1;
+  }
+}
+
+@keyframes claude-pulse {
+  0%, 100% {
+    opacity: 0.65;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
