@@ -66,8 +66,8 @@ export default function SettingsPage() {
     setProfileSuccess('');
     setProfileError('');
 
-    if (!fullName.trim()) {
-      setProfileError('Full name cannot be empty.');
+    if (!fullName.trim() || fullName.trim().length < 2) {
+      setProfileError('Full name must be at least 2 characters long.');
       return;
     }
 
@@ -109,8 +109,12 @@ export default function SettingsPage() {
       setPasswordError('Please enter your current password.');
       return;
     }
-    if (newPassword.length < 4) {
-      setPasswordError('New password must be at least 4 characters long.');
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('New password cannot be the same as your current password.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -188,24 +192,26 @@ export default function SettingsPage() {
             <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                    Full Name
+                  <label htmlFor="settings-fullname" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+                    Full Name *
                   </label>
                   <input
+                    id="settings-fullname"
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="h-10 px-3 bg-[#f8f7f7] border border-ink/30 text-xs font-semibold text-ink focus:border-accent"
+                    className="h-10 px-3 bg-[#f8f7f7] border border-ink/30 text-xs font-semibold text-ink focus:border-ink cursor-text"
                     required
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-ink">
+                  <label htmlFor="settings-email" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
                     Work Email (Locked)
                   </label>
                   <div className="relative">
                     <input
+                      id="settings-email"
                       type="email"
                       value={user?.email || ''}
                       disabled
@@ -218,28 +224,30 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-ink">
+                  <label htmlFor="settings-title" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
                     Job Title
                   </label>
                   <input
+                    id="settings-title"
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="e.g. Senior Backend Engineer"
-                    className="h-10 px-3 bg-[#f8f7f7] border border-ink/30 text-xs text-ink focus:border-accent"
+                    className="h-10 px-3 bg-[#f8f7f7] border border-ink/30 text-xs text-ink focus:border-ink cursor-text"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-ink">
+                  <label htmlFor="settings-department" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
                     Department
                   </label>
                   <input
+                    id="settings-department"
                     type="text"
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
                     placeholder="e.g. Core Engineering"
-                    className="h-10 px-3 bg-[#f8f7f7] border border-ink/30 text-xs text-ink focus:border-accent"
+                    className="h-10 px-3 bg-[#f8f7f7] border border-ink/30 text-xs text-ink focus:border-ink cursor-text"
                   />
                 </div>
               </div>
@@ -318,22 +326,23 @@ export default function SettingsPage() {
 
             <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                  Current Password
+                <label htmlFor="settings-current-password" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+                  Current Password *
                 </label>
                 <div className="relative">
                   <input
+                    id="settings-current-password"
                     type={showCurrentPw ? 'text' : 'password'}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Enter current password"
-                    className="h-10 px-3 pr-10 w-full bg-[#f8f7f7] border border-ink/30 text-xs font-mono text-ink focus:border-accent"
+                    className="h-10 px-3 pr-10 w-full bg-[#f8f7f7] border border-ink/30 text-xs font-mono text-ink focus:border-ink cursor-text"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowCurrentPw(!showCurrentPw)}
-                    className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                    className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5 cursor-pointer"
                     title={showCurrentPw ? 'Hide password' : 'Show password'}
                   >
                     {showCurrentPw ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -343,22 +352,25 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                    New Password
+                  <label htmlFor="settings-new-password" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer flex items-center justify-between">
+                    <span>New Password *</span>
+                    <span className="text-[10px] text-slateText-secondary lowercase font-normal">min 6 chars</span>
                   </label>
                   <div className="relative">
                     <input
+                      id="settings-new-password"
                       type={showNewPw ? 'text' : 'password'}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter new password"
-                      className="h-10 px-3 pr-10 w-full bg-[#f8f7f7] border border-ink/30 text-xs font-mono text-ink focus:border-accent"
+                      placeholder="Enter new password (min 6 chars)"
+                      className="h-10 px-3 pr-10 w-full bg-[#f8f7f7] border border-ink/30 text-xs font-mono text-ink focus:border-ink cursor-text"
                       required
+                      minLength={6}
                     />
                     <button
                       type="button"
                       onClick={() => setShowNewPw(!showNewPw)}
-                      className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                      className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5 cursor-pointer"
                       title={showNewPw ? 'Hide password' : 'Show password'}
                     >
                       {showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -367,22 +379,24 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                    Confirm New Password
+                  <label htmlFor="settings-confirm-password" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+                    Confirm New Password *
                   </label>
                   <div className="relative">
                     <input
+                      id="settings-confirm-password"
                       type={showConfirmPw ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Repeat new password"
-                      className="h-10 px-3 pr-10 w-full bg-[#f8f7f7] border border-ink/30 text-xs font-mono text-ink focus:border-accent"
+                      className="h-10 px-3 pr-10 w-full bg-[#f8f7f7] border border-ink/30 text-xs font-mono text-ink focus:border-ink cursor-text"
                       required
+                      minLength={6}
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPw(!showConfirmPw)}
-                      className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                      className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5 cursor-pointer"
                       title={showConfirmPw ? 'Hide password' : 'Show password'}
                     >
                       {showConfirmPw ? <EyeOff size={15} /> : <Eye size={15} />}

@@ -33,29 +33,58 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{
+    fullName?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  const validateForm = () => {
+    const errs: {
+      fullName?: string;
+      email?: string;
+      password?: string;
+      confirmPassword?: string;
+    } = {};
+
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      errs.fullName = 'Full name is required.';
+    } else if (trimmedName.length < 2) {
+      errs.fullName = 'Full name must be at least 2 characters.';
+    }
+
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail) {
+      errs.email = 'Work email address is required.';
+    } else if (!emailRegex.test(trimmedEmail)) {
+      errs.email = 'Please enter a valid work email address (e.g. name@company.com).';
+    }
+
+    if (!password) {
+      errs.password = 'Password is required.';
+    } else if (password.length < 6) {
+      errs.password = 'Password must be at least 6 characters long.';
+    }
+
+    if (!confirmPassword) {
+      errs.confirmPassword = 'Confirmation password is required.';
+    } else if (password !== confirmPassword) {
+      errs.confirmPassword = 'Passwords do not match.';
+    }
+
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!fullName.trim()) {
-      setError('Please enter your full name.');
-      return;
-    }
-
-    if (!email.includes('@') || !email.includes('.')) {
-      setError('Please enter a valid work email address.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match. Please check and try again.');
+    if (!validateForm()) {
       return;
     }
 
@@ -132,36 +161,62 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
             {/* Full Name */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
-                <User size={13} className="text-slateText-muted" />
-                <span>Full Name *</span>
+              <label htmlFor="register-fullname" className="text-xs font-bold text-ink uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                <div className="flex items-center gap-1.5">
+                  <User size={13} className="text-slateText-muted" />
+                  <span>Full Name *</span>
+                </div>
+                {fieldErrors.fullName && (
+                  <span className="text-accent text-[11px] font-semibold lowercase tracking-normal">
+                    {fieldErrors.fullName}
+                  </span>
+                )}
               </label>
               <input
+                id="register-fullname"
                 type="text"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  if (fieldErrors.fullName) setFieldErrors({ ...fieldErrors, fullName: undefined });
+                }}
                 required
                 placeholder="e.g. Alex Chen"
-                className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-accent font-sans text-ink placeholder:text-[#999]"
+                className={`h-10 px-3 bg-white border text-sm font-sans text-ink placeholder:text-[#999] cursor-text ${
+                  fieldErrors.fullName ? 'border-accent ring-1 ring-accent' : 'border-ink/40 focus:border-ink'
+                }`}
               />
             </div>
 
             {/* Email */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
-                <Mail size={13} className="text-slateText-muted" />
-                <span>Work Email Address *</span>
+              <label htmlFor="register-email" className="text-xs font-bold text-ink uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                <div className="flex items-center gap-1.5">
+                  <Mail size={13} className="text-slateText-muted" />
+                  <span>Work Email Address *</span>
+                </div>
+                {fieldErrors.email && (
+                  <span className="text-accent text-[11px] font-semibold lowercase tracking-normal">
+                    {fieldErrors.email}
+                  </span>
+                )}
               </label>
               <input
+                id="register-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: undefined });
+                }}
                 required
                 placeholder="alex@company.com"
-                className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-accent font-sans text-ink placeholder:text-[#999]"
+                className={`h-10 px-3 bg-white border text-sm font-sans text-ink placeholder:text-[#999] cursor-text ${
+                  fieldErrors.email ? 'border-accent ring-1 ring-accent' : 'border-ink/40 focus:border-ink'
+                }`}
               />
             </div>
 
@@ -169,86 +224,117 @@ export default function RegisterPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Password */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
-                  <Lock size={13} className="text-slateText-muted" />
-                  <span>Password *</span>
+                <label htmlFor="register-password" className="text-xs font-bold text-ink uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-1.5">
+                    <Lock size={13} className="text-slateText-muted" />
+                    <span>Password *</span>
+                  </div>
                 </label>
                 <div className="relative">
                   <input
+                    id="register-password"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: undefined });
+                    }}
                     required
                     minLength={6}
                     placeholder="Min 6 characters"
-                    className="h-10 px-3 pr-9 w-full bg-white border border-ink/40 text-sm focus:border-accent font-mono text-ink placeholder:text-[#999]"
+                    className={`h-10 px-3 pr-9 w-full bg-white border text-sm font-mono text-ink placeholder:text-[#999] cursor-text ${
+                      fieldErrors.password ? 'border-accent ring-1 ring-accent' : 'border-ink/40 focus:border-ink'
+                    }`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                    className="absolute right-2.5 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5 cursor-pointer"
                     title={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
+                {fieldErrors.password && (
+                  <span className="text-accent text-[11px] font-semibold">
+                    {fieldErrors.password}
+                  </span>
+                )}
               </div>
 
               {/* Confirm Password */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
-                  <Lock size={13} className="text-slateText-muted" />
-                  <span>Confirm Password *</span>
+                <label htmlFor="register-confirm-password" className="text-xs font-bold text-ink uppercase tracking-wider flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-1.5">
+                    <Lock size={13} className="text-slateText-muted" />
+                    <span>Confirm Password *</span>
+                  </div>
                 </label>
                 <div className="relative">
                   <input
+                    id="register-confirm-password"
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      if (fieldErrors.confirmPassword)
+                        setFieldErrors({ ...fieldErrors, confirmPassword: undefined });
+                    }}
                     required
                     minLength={6}
                     placeholder="Re-enter password"
-                    className="h-10 px-3 pr-9 w-full bg-white border border-ink/40 text-sm focus:border-accent font-mono text-ink placeholder:text-[#999]"
+                    className={`h-10 px-3 pr-9 w-full bg-white border text-sm font-mono text-ink placeholder:text-[#999] cursor-text ${
+                      fieldErrors.confirmPassword
+                        ? 'border-accent ring-1 ring-accent'
+                        : 'border-ink/40 focus:border-ink'
+                    }`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-2.5 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                    className="absolute right-2.5 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5 cursor-pointer"
                     title={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
                     {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
+                {fieldErrors.confirmPassword && (
+                  <span className="text-accent text-[11px] font-semibold">
+                    {fieldErrors.confirmPassword}
+                  </span>
+                )}
               </div>
             </div>
 
             {/* Department & Job Title */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
+                <label htmlFor="register-department" className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5 cursor-pointer">
                   <Layers size={13} className="text-slateText-muted" />
                   <span>Department</span>
                 </label>
                 <input
+                  id="register-department"
                   type="text"
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
                   placeholder="Engineering"
-                  className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-accent font-sans text-ink placeholder:text-[#999]"
+                  className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-ink font-sans text-ink placeholder:text-[#999] cursor-text"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
+                <label htmlFor="register-title" className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5 cursor-pointer">
                   <Briefcase size={13} className="text-slateText-muted" />
                   <span>Job Title</span>
                 </label>
                 <input
+                  id="register-title"
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Software Engineer"
-                  className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-accent font-sans text-ink placeholder:text-[#999]"
+                  className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-ink font-sans text-ink placeholder:text-[#999] cursor-text"
                 />
               </div>
             </div>

@@ -74,8 +74,18 @@ export default function ManagerReviewPage() {
   };
 
   const handleDecision = async (action: 'APPROVE' | 'REQUEST_CHANGES') => {
-    if (action === 'REQUEST_CHANGES' && !feedbackComment.trim()) {
-      setError('A feedback comment is required when requesting changes.');
+    if (report?.status === 'DRAFT') {
+      setError('Draft reports cannot be reviewed or approved. Drafts are private work-in-progress for team members.');
+      return;
+    }
+
+    if (report?.status !== 'SUBMITTED') {
+      setError(`Cannot review report in ${report?.status} status. Only SUBMITTED reports can be reviewed.`);
+      return;
+    }
+
+    if (action === 'REQUEST_CHANGES' && feedbackComment.trim().length < 5) {
+      setError('Please provide a constructive feedback comment (at least 5 characters) explaining what needs correction.');
       return;
     }
 
@@ -86,11 +96,9 @@ export default function ManagerReviewPage() {
       await ApiClient.reviewReport(id, action, feedbackComment);
       router.push('/reports/history');
     } catch (err: any) {
-      // Fallback local transition
-      router.push('/reports/history');
+      setError(err.message || 'Failed to submit review decision.');
     } finally {
       setIsSubmitting(false);
-      setModalType(null);
     }
   };
 
@@ -104,6 +112,10 @@ export default function ManagerReviewPage() {
     (selectedVer?.testingHours || 0) +
     (selectedVer?.meetingHours || 0) +
     (selectedVer?.docHours || 0);
+
+  const isSubmitted = report.status === 'SUBMITTED';
+  const isDraft = report.status === 'DRAFT';
+  const isApproved = report.status === 'APPROVED';
 
   return (
     <div className="flex flex-col gap-6 pb-12">
@@ -119,31 +131,64 @@ export default function ManagerReviewPage() {
 
         {/* Action Decision Buttons */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setModalType('REQUEST_CHANGES');
-              setFeedbackComment('');
-              setError('');
-            }}
-            className="h-10 px-4 bg-white border-2 border-accent text-accent-hover text-xs font-black hover:bg-accent-tint transition-colors flex items-center gap-1.5"
-          >
-            <AlertCircle size={15} />
-            <span>Request Changes</span>
-          </button>
+          {isDraft && (
+            <div className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 border-2 border-amber-400 text-amber-900 text-xs font-bold font-mono">
+              <AlertCircle size={14} className="text-amber-700 shrink-0" />
+              <span>DRAFT — Private WIP (Cannot be reviewed or approved)</span>
+            </div>
+          )}
 
-          <button
-            onClick={() => {
-              setModalType('APPROVE');
-              setFeedbackComment('Report approved with zero revisions needed.');
-              setError('');
-            }}
-            className="h-10 px-5 bg-[#166534] text-white text-xs font-black hover:bg-[#15803d] transition-colors flex items-center gap-1.5 shadow-sm"
-          >
-            <CheckCircle2 size={15} />
-            <span>Approve Report</span>
-          </button>
+          {isApproved && (
+            <div className="flex items-center gap-1.5 px-3 py-2 bg-[#dcfce7] border-2 border-[#166534] text-[#166534] text-xs font-bold font-mono">
+              <CheckCircle2 size={14} className="shrink-0" />
+              <span>APPROVED — Review cycle completed</span>
+            </div>
+          )}
+
+          {isSubmitted && (
+            <>
+              <button
+                onClick={() => {
+                  setModalType('REQUEST_CHANGES');
+                  setFeedbackComment('');
+                  setError('');
+                }}
+                className="h-10 px-4 bg-white border-2 border-accent text-accent-hover text-xs font-black hover:bg-accent-tint transition-colors flex items-center gap-1.5"
+              >
+                <AlertCircle size={15} />
+                <span>Request Changes</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setModalType('APPROVE');
+                  setFeedbackComment('Report approved with zero revisions needed.');
+                  setError('');
+                }}
+                className="h-10 px-5 bg-[#166534] text-white text-xs font-black hover:bg-[#15803d] transition-colors flex items-center gap-1.5 shadow-sm"
+              >
+                <CheckCircle2 size={15} />
+                <span>Approve Report</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Draft Warning Banner if user is viewing a draft */}
+      {isDraft && (
+        <div className="p-4 bg-amber-50 border-2 border-amber-400 text-amber-900 text-xs flex items-start gap-3">
+          <AlertCircle size={18} className="text-amber-700 shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-1">
+            <span className="font-black uppercase tracking-wider text-amber-950">
+              Team Member Work-In-Progress Draft
+            </span>
+            <p className="leading-relaxed">
+              This report is currently in <b>DRAFT</b> status. Drafts exist to help team members prepare their deliverables and consult the AI Assistant. Drafts cannot be submitted for manager evaluation, and managers cannot approve or request changes on a draft. Once the team member submits the report, it will enter the review queue.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Review Header Banner */}
       <div className="p-6 bg-white border-2 border-ink/40 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -160,8 +205,24 @@ export default function ManagerReviewPage() {
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-slateText-muted">
                 {range}
               </span>
-              <span className="px-2 py-0.5 text-[10px] font-black uppercase bg-[#dbeafe] text-[#1e40af] border border-[#1e40af]">
-                Awaiting Manager Review
+              <span
+                className={`px-2 py-0.5 text-[10px] font-black uppercase border ${
+                  isDraft
+                    ? 'bg-amber-100 text-amber-800 border-amber-400'
+                    : isApproved
+                    ? 'bg-[#dcfce7] text-[#166534] border-[#166534]'
+                    : isSubmitted
+                    ? 'bg-[#dbeafe] text-[#1e40af] border-[#1e40af]'
+                    : 'bg-[#f3f2f2] text-ink border-ink/40'
+                }`}
+              >
+                {isDraft
+                  ? 'Private Draft'
+                  : isApproved
+                  ? 'Approved'
+                  : isSubmitted
+                  ? 'Awaiting Manager Review'
+                  : report.status.replace('_', ' ')}
               </span>
             </div>
 
@@ -323,10 +384,11 @@ export default function ManagerReviewPage() {
             </p>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-ink">
+              <label htmlFor="feedback-comment" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
                 {modalType === 'APPROVE' ? 'Approval Note (Optional)' : 'Feedback Comment (Required)'}
               </label>
               <textarea
+                id="feedback-comment"
                 rows={4}
                 value={feedbackComment}
                 onChange={(e) => setFeedbackComment(e.target.value)}
@@ -335,7 +397,7 @@ export default function ManagerReviewPage() {
                     ? 'Great work this week!'
                     : 'Please link the pull request deliverable and clarify test results...'
                 }
-                className="w-full p-3 bg-white border border-ink/40 text-xs font-medium focus:border-accent"
+                className="w-full p-3 bg-white border border-ink/40 text-xs font-medium focus:border-accent cursor-text"
               />
             </div>
 

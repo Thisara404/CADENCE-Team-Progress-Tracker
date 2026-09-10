@@ -177,7 +177,61 @@ function WeeklyReportFormContent() {
   };
 
   // Save Draft
+  // Form validation helper
+  const validateReport = (isDraft: boolean) => {
+    if (!projectId) {
+      setFeedbackMsg({ type: 'err', text: 'Please select a project category.' });
+      return false;
+    }
+    if (!weekStartDate || !weekEndDate) {
+      setFeedbackMsg({ type: 'err', text: 'Both week start date and end date are required.' });
+      return false;
+    }
+    if (new Date(weekEndDate) < new Date(weekStartDate)) {
+      setFeedbackMsg({ type: 'err', text: 'Week end date cannot be earlier than week start date.' });
+      return false;
+    }
+
+    if (Number(devHours) < 0 || Number(testingHours) < 0 || Number(meetingHours) < 0 || Number(docHours) < 0) {
+      setFeedbackMsg({ type: 'err', text: 'Hours worked by task type cannot be negative.' });
+      return false;
+    }
+
+    // Strict validation for submission
+    if (!isDraft) {
+      if (tasks.length === 0) {
+        setFeedbackMsg({ type: 'err', text: 'Please include at least one task in the report.' });
+        return false;
+      }
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i];
+        if (!t.taskName || !t.taskName.trim()) {
+          setFeedbackMsg({ type: 'err', text: `Task #${i + 1} is missing a task name.` });
+          return false;
+        }
+        if (Number(t.plannedHours) < 0 || Number(t.spentHours) < 0) {
+          setFeedbackMsg({ type: 'err', text: `Hours cannot be negative for task #${i + 1}.` });
+          return false;
+        }
+        if (
+          Number(t.plannedPercentage) < 0 ||
+          Number(t.plannedPercentage) > 100 ||
+          Number(t.actualPercentage) < 0 ||
+          Number(t.actualPercentage) > 100
+        ) {
+          setFeedbackMsg({ type: 'err', text: `Completion percentage must be between 0% and 100% for task #${i + 1}.` });
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  // Save Draft (Private WIP for team member)
   const handleSaveDraft = async () => {
+    if (!validateReport(true)) return;
+
     setIsLoading(true);
     setFeedbackMsg(null);
 
@@ -191,10 +245,10 @@ function WeeklyReportFormContent() {
       keyBlockerIndex,
       achievements: achievements.filter((a) => a.trim().length > 0),
       keyAchievementIndex,
-      devHours: Number(devHours) || 0,
-      testingHours: Number(testingHours) || 0,
-      meetingHours: Number(meetingHours) || 0,
-      docHours: Number(docHours) || 0,
+      devHours: Math.max(0, Number(devHours) || 0),
+      testingHours: Math.max(0, Number(testingHours) || 0),
+      meetingHours: Math.max(0, Number(meetingHours) || 0),
+      docHours: Math.max(0, Number(docHours) || 0),
       notes,
       tasks: tasks.filter((t) => t.taskName.trim().length > 0),
     };
@@ -203,20 +257,20 @@ function WeeklyReportFormContent() {
       const res = await ApiClient.saveDraft(payload);
       if (res && res.id) setReportId(res.id);
       setStatus('DRAFT');
-      setFeedbackMsg({ type: 'ok', text: 'Report saved as draft successfully.' });
+      setFeedbackMsg({
+        type: 'ok',
+        text: 'Report saved as private draft. Managers cannot see or review drafts until you submit.',
+      });
     } catch (err: any) {
-      setFeedbackMsg({ type: 'ok', text: 'Draft state saved locally.' });
+      setFeedbackMsg({ type: 'err', text: err.message || 'Failed to save draft.' });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Submit Report
+  // Submit Report (Formal submission for manager review)
   const handleSubmitReport = async () => {
-    if (tasks.length === 0 || !tasks.some((t) => t.taskName.trim().length > 0)) {
-      setFeedbackMsg({ type: 'err', text: 'Please include at least one task in the report.' });
-      return;
-    }
+    if (!validateReport(false)) return;
 
     setIsLoading(true);
     setFeedbackMsg(null);
@@ -230,10 +284,10 @@ function WeeklyReportFormContent() {
       keyBlockerIndex,
       achievements: achievements.filter((a) => a.trim().length > 0),
       keyAchievementIndex,
-      devHours: Number(devHours) || 0,
-      testingHours: Number(testingHours) || 0,
-      meetingHours: Number(meetingHours) || 0,
-      docHours: Number(docHours) || 0,
+      devHours: Math.max(0, Number(devHours) || 0),
+      testingHours: Math.max(0, Number(testingHours) || 0),
+      meetingHours: Math.max(0, Number(meetingHours) || 0),
+      docHours: Math.max(0, Number(docHours) || 0),
       notes,
       tasks: tasks.filter((t) => t.taskName.trim().length > 0),
     };
@@ -254,15 +308,10 @@ function WeeklyReportFormContent() {
         router.push('/reports/history');
       }, 1200);
     } catch (err: any) {
-      // Local fallback submission
-      setStatus('SUBMITTED');
       setFeedbackMsg({
-        type: 'ok',
-        text: 'Report submitted successfully for manager review.',
+        type: 'err',
+        text: err.message || 'Failed to submit report. Please check the form errors.',
       });
-      setTimeout(() => {
-        router.push('/reports/history');
-      }, 1200);
     } finally {
       setIsLoading(false);
     }
@@ -363,16 +412,36 @@ function WeeklyReportFormContent() {
         </div>
       )}
 
+      {/* Approved Lock Alert */}
+      {status === 'APPROVED' && (
+        <div className="p-4 bg-[#dcfce7] border-2 border-[#166534] text-[#166534] text-xs font-bold flex items-center gap-2">
+          <CheckCircle size={16} className="shrink-0" />
+          <span>This weekly report has already been approved by your manager and is locked from modification.</span>
+        </div>
+      )}
+
+      {/* Draft Mode Notice */}
+      {status === 'DRAFT' && (
+        <div className="p-3 bg-[#e0f2fe] border border-[#7dd3fc] text-[#0369a1] text-xs flex items-center gap-2">
+          <Clock size={15} className="shrink-0 text-[#0284c7]" />
+          <span>
+            <b>Private Draft Mode:</b> This report is saved only for you. Your manager cannot view or review it until you click <b>Submit Report</b>.
+          </span>
+        </div>
+      )}
+
       {/* Section 1: Week & Project Category */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-white border border-ink/40">
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold uppercase tracking-wider text-ink">
-            Project / Category
+          <label htmlFor="report-project" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+            Project / Category *
           </label>
           <select
+            id="report-project"
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
-            className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-medium focus:border-accent"
+            disabled={status === 'APPROVED'}
+            className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-medium focus:border-ink cursor-pointer"
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -383,26 +452,30 @@ function WeeklyReportFormContent() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold uppercase tracking-wider text-ink">
-            Week Start Date
+          <label htmlFor="report-week-start" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+            Week Start Date *
           </label>
           <input
+            id="report-week-start"
             type="date"
             value={weekStartDate}
             onChange={(e) => setWeekStartDate(e.target.value)}
-            className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-medium focus:border-accent"
+            disabled={status === 'APPROVED'}
+            className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-medium focus:border-ink cursor-text"
           />
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-bold uppercase tracking-wider text-ink">
-            Week End Date
+          <label htmlFor="report-week-end" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+            Week End Date *
           </label>
           <input
+            id="report-week-end"
             type="date"
             value={weekEndDate}
             onChange={(e) => setWeekEndDate(e.target.value)}
-            className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-medium focus:border-accent"
+            disabled={status === 'APPROVED'}
+            className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-medium focus:border-ink cursor-text"
           />
         </div>
       </div>
@@ -546,15 +619,17 @@ function WeeklyReportFormContent() {
 
       {/* Section 3: Tasks Planned for Next Week */}
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-black uppercase tracking-wider text-ink">
+        <label htmlFor="report-next-week" className="text-sm font-black uppercase tracking-wider text-ink cursor-pointer">
           2. Tasks Planned for Next Week
-        </h3>
+        </label>
         <textarea
+          id="report-next-week"
           rows={3}
           value={tasksPlannedNextWeek}
           onChange={(e) => setTasksPlannedNextWeek(e.target.value)}
+          disabled={status === 'APPROVED'}
           placeholder="Outline deliverables and milestones targeted for the upcoming sprint..."
-          className="w-full p-3 bg-white border border-ink/40 text-xs font-medium focus:border-accent"
+          className="w-full p-3 bg-white border border-ink/40 text-xs font-medium focus:border-ink cursor-text"
         />
       </div>
 
@@ -699,58 +774,66 @@ function WeeklyReportFormContent() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold uppercase tracking-wider text-ink">
+            <label htmlFor="report-dev-hours" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
               Development (h)
             </label>
             <input
+              id="report-dev-hours"
               type="number"
               min={0}
               step={0.5}
               value={devHours}
               onChange={(e) => setDevHours(Number(e.target.value))}
-              className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-mono font-bold"
+              disabled={status === 'APPROVED'}
+              className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-mono font-bold focus:border-ink cursor-text"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold uppercase tracking-wider text-ink">
+            <label htmlFor="report-testing-hours" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
               Testing (h)
             </label>
             <input
+              id="report-testing-hours"
               type="number"
               min={0}
               step={0.5}
               value={testingHours}
               onChange={(e) => setTestingHours(Number(e.target.value))}
-              className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-mono font-bold"
+              disabled={status === 'APPROVED'}
+              className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-mono font-bold focus:border-ink cursor-text"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold uppercase tracking-wider text-ink">
+            <label htmlFor="report-meeting-hours" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
               Meetings (h)
             </label>
             <input
+              id="report-meeting-hours"
               type="number"
               min={0}
               step={0.5}
               value={meetingHours}
               onChange={(e) => setMeetingHours(Number(e.target.value))}
-              className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-mono font-bold"
+              disabled={status === 'APPROVED'}
+              className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-mono font-bold focus:border-ink cursor-text"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold uppercase tracking-wider text-ink">
+            <label htmlFor="report-doc-hours" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
               Documentation (h)
             </label>
             <input
+              id="report-doc-hours"
               type="number"
               min={0}
               step={0.5}
               value={docHours}
               onChange={(e) => setDocHours(Number(e.target.value))}
-              className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-mono font-bold"
+              disabled={status === 'APPROVED'}
+              className="h-9 px-3 bg-[#f3f2f2] border border-ink/40 text-xs font-mono font-bold focus:border-ink cursor-text"
             />
           </div>
         </div>
@@ -758,15 +841,17 @@ function WeeklyReportFormContent() {
 
       {/* Section 7: Optional Notes */}
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-black uppercase tracking-wider text-ink">
+        <label htmlFor="report-notes" className="text-sm font-black uppercase tracking-wider text-ink cursor-pointer">
           6. Optional Notes or Additional Links
-        </h3>
+        </label>
         <textarea
+          id="report-notes"
           rows={2}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
+          disabled={status === 'APPROVED'}
           placeholder="Any additional context for your engineering manager..."
-          className="w-full p-3 bg-white border border-ink/40 text-xs font-medium focus:border-accent"
+          className="w-full p-3 bg-white border border-ink/40 text-xs font-medium focus:border-ink cursor-text"
         />
       </div>
 

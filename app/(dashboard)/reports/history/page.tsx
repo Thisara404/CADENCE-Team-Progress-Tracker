@@ -90,7 +90,10 @@ export default function ReportHistoryPage() {
 
         {/* Status Filter Tabs */}
         <div className="flex items-center gap-1 border border-ink/40 bg-white p-1">
-          {['ALL', 'SUBMITTED', 'NEEDS_CORRECTION', 'APPROVED', 'DRAFT'].map((st) => (
+          {(isManager
+            ? ['ALL', 'SUBMITTED', 'NEEDS_CORRECTION', 'APPROVED']
+            : ['ALL', 'DRAFT', 'SUBMITTED', 'NEEDS_CORRECTION', 'APPROVED']
+          ).map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}

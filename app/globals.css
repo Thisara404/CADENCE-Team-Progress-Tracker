@@ -28,13 +28,45 @@
     color: inherit;
     border-radius: 0;
   }
-  :focus {
-    outline: none;
+
+  /* Explicit mouse cursor behavior for text input fields */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="date"],
+  textarea {
+    cursor: text !important;
   }
+
+  button,
+  select,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    cursor: pointer !important;
+  }
+
+  /* High-contrast, prominent mouse focus indicators */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: 2px solid #201e1d !important;
+    outline-offset: 0px !important;
+    border-color: #201e1d !important;
+    background-color: #ffffff !important;
+  }
+
   :focus-visible {
-    outline: 2px solid #ec3013;
-    outline-offset: 2px;
+    outline: 2px solid #ec3013 !important;
+    outline-offset: 1px !important;
   }
+
   ::selection {
     background: rgba(236, 48, 19, 0.3);
   }

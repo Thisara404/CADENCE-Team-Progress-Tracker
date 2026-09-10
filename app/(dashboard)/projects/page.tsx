@@ -44,38 +44,58 @@ export default function ProjectsManagementPage() {
     fetchProjects();
   }, []);
 
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; code?: string }>({});
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentProject.name?.trim() || !currentProject.code?.trim()) {
-      setError('Project name and code are required.');
-      return;
+    setError('');
+
+    const errs: { name?: string; code?: string } = {};
+    const trimmedName = currentProject.name?.trim() || '';
+    const trimmedCode = currentProject.code?.trim().toUpperCase() || '';
+    const codeRegex = /^[A-Z0-9_-]{2,10}$/;
+
+    if (!trimmedName) {
+      errs.name = 'Project name is required.';
+    } else if (trimmedName.length < 2) {
+      errs.name = 'Project name must be at least 2 characters.';
     }
+
+    if (!trimmedCode) {
+      errs.code = 'Project code is required.';
+    } else if (!codeRegex.test(trimmedCode)) {
+      errs.code = 'Code must be 2-10 uppercase alphanumeric characters (e.g. PROJ-01).';
+    }
+
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) return;
 
     try {
       if (modalMode === 'create') {
         await ApiClient.createProject({
-          name: currentProject.name,
-          code: currentProject.code.toUpperCase(),
-          description: currentProject.description,
+          name: trimmedName,
+          code: trimmedCode,
+          description: currentProject.description?.trim(),
         });
       } else if (modalMode === 'edit' && currentProject.id) {
         await ApiClient.updateProject(currentProject.id, {
-          name: currentProject.name,
-          code: currentProject.code.toUpperCase(),
-          description: currentProject.description,
+          name: trimmedName,
+          code: trimmedCode,
+          description: currentProject.description?.trim(),
         });
       }
-      fetchProjects();
+      await fetchProjects();
       setModalMode(null);
     } catch (err: any) {
+      setError(err.message || 'Failed to save project category.');
       // Local state fallback
       if (modalMode === 'create') {
         setProjects([
           ...projects,
           {
             id: `proj-${Date.now()}`,
-            name: currentProject.name!,
-            code: currentProject.code!.toUpperCase(),
+            name: trimmedName,
+            code: trimmedCode,
             description: currentProject.description,
             status: 'ACTIVE',
             reportCount: 0,
@@ -85,7 +105,7 @@ export default function ProjectsManagementPage() {
         setProjects(
           projects.map((p) =>
             p.id === currentProject.id
-              ? { ...p, ...currentProject }
+              ? { ...p, ...currentProject, name: trimmedName, code: trimmedCode }
               : p,
           ),
         );
@@ -220,45 +240,68 @@ export default function ProjectsManagementPage() {
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="flex flex-col gap-3">
+            <form onSubmit={handleSave} noValidate className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                  Category / Project Name
+                <label htmlFor="project-name" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer flex items-center justify-between">
+                  <span>Category / Project Name *</span>
+                  {fieldErrors.name && (
+                    <span className="text-accent text-[11px] font-semibold lowercase tracking-normal">
+                      {fieldErrors.name}
+                    </span>
+                  )}
                 </label>
                 <input
+                  id="project-name"
                   type="text"
                   value={currentProject.name}
-                  onChange={(e) => setCurrentProject({ ...currentProject, name: e.target.value })}
+                  onChange={(e) => {
+                    setCurrentProject({ ...currentProject, name: e.target.value });
+                    if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: undefined });
+                  }}
                   placeholder="e.g. Mobile App Redesign"
                   required
-                  className="h-9 px-3 bg-white border border-ink/40 text-xs font-medium focus:border-accent"
+                  className={`h-9 px-3 bg-white border text-xs font-medium cursor-text ${
+                    fieldErrors.name ? 'border-accent ring-1 ring-accent' : 'border-ink/40 focus:border-ink'
+                  }`}
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                  Project Code (Uppercase)
+                <label htmlFor="project-code" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer flex items-center justify-between">
+                  <span>Project Code (Uppercase) *</span>
+                  {fieldErrors.code && (
+                    <span className="text-accent text-[11px] font-semibold lowercase tracking-normal">
+                      {fieldErrors.code}
+                    </span>
+                  )}
                 </label>
                 <input
+                  id="project-code"
                   type="text"
                   value={currentProject.code}
-                  onChange={(e) => setCurrentProject({ ...currentProject, code: e.target.value })}
+                  onChange={(e) => {
+                    setCurrentProject({ ...currentProject, code: e.target.value.toUpperCase() });
+                    if (fieldErrors.code) setFieldErrors({ ...fieldErrors, code: undefined });
+                  }}
                   placeholder="e.g. MAR-01"
                   required
-                  className="h-9 px-3 bg-white border border-ink/40 text-xs font-mono font-bold focus:border-accent uppercase"
+                  className={`h-9 px-3 bg-white border text-xs font-mono font-bold uppercase cursor-text ${
+                    fieldErrors.code ? 'border-accent ring-1 ring-accent' : 'border-ink/40 focus:border-ink'
+                  }`}
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink">
+                <label htmlFor="project-description" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
                   Description
                 </label>
                 <textarea
+                  id="project-description"
                   rows={3}
                   value={currentProject.description || ''}
                   onChange={(e) => setCurrentProject({ ...currentProject, description: e.target.value })}
                   placeholder="What scope rolls up into this category?"
-                  className="p-3 bg-white border border-ink/40 text-xs font-medium focus:border-accent"
+                  className="p-3 bg-white border border-ink/40 text-xs font-medium focus:border-ink cursor-text"
                 />
               </div>
 

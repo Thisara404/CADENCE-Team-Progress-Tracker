@@ -79,20 +79,30 @@ export default function UserManagementPage() {
     e.preventDefault();
     setCreateError('');
 
-    if (!newUserName.trim() || !newUserEmail.includes('@')) {
-      setCreateError('Please provide a valid full name and work email.');
+    const trimmedName = newUserName.trim();
+    const trimmedEmail = newUserEmail.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!trimmedName || trimmedName.length < 2) {
+      setCreateError('Full name must be at least 2 characters long.');
       return;
     }
-    if (!newUserPassword || newUserPassword.length < 4) {
-      setCreateError('Password must be at least 4 characters long.');
+
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setCreateError('Please provide a valid work email address (e.g. name@company.com).');
+      return;
+    }
+
+    if (!newUserPassword || newUserPassword.length < 6) {
+      setCreateError('Password must be at least 6 characters long.');
       return;
     }
 
     setIsSubmitting(true);
     try {
       await ApiClient.createUser({
-        fullName: newUserName.trim(),
-        email: newUserEmail.trim(),
+        fullName: trimmedName,
+        email: trimmedEmail,
         password: newUserPassword,
         role: newUserRole,
         department: newUserDept.trim() || 'Engineering',
@@ -103,7 +113,7 @@ export default function UserManagementPage() {
             : 'Software Engineer'),
       });
       await fetchUsers();
-      setNotification(`User ${newUserName} created with password. They can now log in.`);
+      setNotification(`User ${trimmedName} created with password. They can now log in.`);
       setCreateModalOpen(false);
     } catch (err: any) {
       setCreateError(err.message || 'Failed to create user account.');
@@ -122,8 +132,8 @@ export default function UserManagementPage() {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
-    if (!newResetPassword || newResetPassword.length < 4) {
-      setResetError('New password must be at least 4 characters long.');
+    if (!newResetPassword || newResetPassword.length < 6) {
+      setResetError('New password must be at least 6 characters long.');
       return;
     }
 
@@ -408,51 +418,55 @@ export default function UserManagementPage() {
 
             <form onSubmit={handleCreateUser} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                  Full Name
+                <label htmlFor="create-user-name" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+                  Full Name *
                 </label>
                 <input
+                  id="create-user-name"
                   type="text"
                   required
                   placeholder="e.g. Rachel Adams"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
-                  className="h-10 px-3 bg-white border border-ink/30 text-xs text-ink focus:border-accent"
+                  className="h-10 px-3 bg-white border border-ink/30 text-xs text-ink focus:border-ink cursor-text"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                  Work Email
+                <label htmlFor="create-user-email" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+                  Work Email *
                 </label>
                 <input
+                  id="create-user-email"
                   type="email"
                   required
                   placeholder="rachel@company.com"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
-                  className="h-10 px-3 bg-white border border-ink/30 text-xs font-mono text-ink focus:border-accent"
+                  className="h-10 px-3 bg-white border border-ink/30 text-xs font-mono text-ink focus:border-ink cursor-text"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink flex items-center justify-between">
-                  <span>Initial Password</span>
-                  <span className="text-[10px] text-slateText-secondary lowercase font-normal">min 4 chars</span>
+                <label htmlFor="create-user-password" className="text-xs font-bold uppercase tracking-wider text-ink flex items-center justify-between cursor-pointer">
+                  <span>Initial Password *</span>
+                  <span className="text-[10px] text-slateText-secondary lowercase font-normal">min 6 chars</span>
                 </label>
                 <div className="relative">
                   <input
+                    id="create-user-password"
                     type={showCreatePw ? 'text' : 'password'}
                     required
+                    minLength={6}
                     value={newUserPassword}
                     onChange={(e) => setNewUserPassword(e.target.value)}
-                    placeholder="Create user password"
-                    className="h-10 px-3 pr-10 w-full bg-white border border-ink/30 text-xs font-mono text-ink focus:border-accent"
+                    placeholder="Create user password (min 6 chars)"
+                    className="h-10 px-3 pr-10 w-full bg-white border border-ink/30 text-xs font-mono text-ink focus:border-ink cursor-text"
                   />
                   <button
                     type="button"
                     onClick={() => setShowCreatePw(!showCreatePw)}
-                    className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                    className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5 cursor-pointer"
                     title={showCreatePw ? 'Hide password' : 'Show password'}
                   >
                     {showCreatePw ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -462,13 +476,14 @@ export default function UserManagementPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                    Assigned Role
+                  <label htmlFor="create-user-role" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
+                    Assigned Role *
                   </label>
                   <select
+                    id="create-user-role"
                     value={newUserRole}
                     onChange={(e) => setNewUserRole(e.target.value as Role)}
-                    className="h-10 px-2 bg-white border border-ink/30 text-xs font-bold text-ink focus:border-accent"
+                    className="h-10 px-2 bg-white border border-ink/30 text-xs font-bold text-ink focus:border-ink cursor-pointer"
                   >
                     <option value="TEAM_MEMBER">Team Member</option>
                     <option value="MANAGER">Manager</option>
@@ -477,29 +492,31 @@ export default function UserManagementPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-ink">
+                  <label htmlFor="create-user-dept" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
                     Department
                   </label>
                   <input
+                    id="create-user-dept"
                     type="text"
                     value={newUserDept}
                     onChange={(e) => setNewUserDept(e.target.value)}
                     placeholder="Engineering"
-                    className="h-10 px-3 bg-white border border-ink/30 text-xs text-ink focus:border-accent"
+                    className="h-10 px-3 bg-white border border-ink/30 text-xs text-ink focus:border-ink cursor-text"
                   />
                 </div>
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink">
+                <label htmlFor="create-user-title" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer">
                   Job Title
                 </label>
                 <input
+                  id="create-user-title"
                   type="text"
                   value={newUserTitle}
                   onChange={(e) => setNewUserTitle(e.target.value)}
                   placeholder="e.g. Senior Backend Engineer"
-                  className="h-10 px-3 bg-white border border-ink/30 text-xs text-ink focus:border-accent"
+                  className="h-10 px-3 bg-white border border-ink/30 text-xs text-ink focus:border-ink cursor-text"
                 />
               </div>
 
@@ -553,22 +570,25 @@ export default function UserManagementPage() {
 
             <form onSubmit={handleResetPassword} className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                  New Password
+                <label htmlFor="reset-user-password" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer flex items-center justify-between">
+                  <span>New Password</span>
+                  <span className="text-[10px] text-slateText-secondary lowercase font-normal">min 6 chars</span>
                 </label>
                 <div className="relative">
                   <input
+                    id="reset-user-password"
                     type={showResetPw ? 'text' : 'password'}
                     required
-                    placeholder="Enter new password"
+                    minLength={6}
+                    placeholder="Enter new password (min 6 chars)"
                     value={newResetPassword}
                     onChange={(e) => setNewResetPassword(e.target.value)}
-                    className="h-10 px-3 pr-10 w-full bg-white border border-ink/30 text-xs font-mono text-ink focus:border-accent"
+                    className="h-10 px-3 pr-10 w-full bg-white border border-ink/30 text-xs font-mono text-ink focus:border-ink cursor-text"
                   />
                   <button
                     type="button"
                     onClick={() => setShowResetPw(!showResetPw)}
-                    className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                    className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5 cursor-pointer"
                     title={showResetPw ? 'Hide password' : 'Show password'}
                   >
                     {showResetPw ? <EyeOff size={15} /> : <Eye size={15} />}

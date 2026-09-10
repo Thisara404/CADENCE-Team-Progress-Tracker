@@ -14,19 +14,40 @@ export default function LoginPage() {
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  const validateForm = () => {
+    const errs: { email?: string; password?: string } = {};
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!trimmedEmail) {
+      errs.email = 'Work email address is required.';
+    } else if (!emailRegex.test(trimmedEmail)) {
+      errs.email = 'Please enter a valid work email address (e.g. name@company.com).';
+    }
+
+    if (!password) {
+      errs.password = 'Password is required.';
+    }
+
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.includes('@')) {
-      setError('Please enter a valid work email.');
-      return;
-    }
-    setIsLoading(true);
     setError('');
 
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       // Read user from storage to decide redirection
       const saved = localStorage.getItem('cadence_user');
       const parsed = saved ? JSON.parse(saved) : null;
@@ -36,7 +57,7 @@ export default function LoginPage() {
         router.push('/dashboard');
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check credentials.');
+      setError(err.message || 'Invalid credentials. Please check your email and password.');
     } finally {
       setIsLoading(false);
     }
@@ -70,67 +91,60 @@ export default function LoginPage() {
 
           <div className="h-0.5 bg-ink/20" />
 
-          {/* Test Credentials Reference in Text */}
-          {/* <div className="p-3.5 bg-white border border-ink/40 text-xs flex flex-col gap-2.5 shadow-[1px_1px_0px_rgba(0,0,0,0.15)]">
-            <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-slateText-subtle text-[10.5px]">
-              <Shield size={13} className="text-accent" />
-              <span>System Test Credentials</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
-              <div className="p-2.5 bg-[#f8f7f7] border border-ink/20 flex flex-col gap-0.5">
-                <span className="font-bold text-ink uppercase text-[10px] tracking-wider font-sans">
-                  Admin / Manager
-                </span>
-                <span className="text-ink font-semibold select-all break-all">admin@cadence.com</span>
-                <span className="text-slateText-muted text-[10.5px]">
-                  Password: <span className="text-ink font-bold font-mono">password123</span>
-                </span>
-              </div>
-
-              <div className="p-2.5 bg-[#f8f7f7] border border-ink/20 flex flex-col gap-0.5">
-                <span className="font-bold text-ink uppercase text-[10px] tracking-wider font-sans">
-                  Team Member
-                </span>
-                <span className="text-ink font-semibold select-all break-all">alex@company.com</span>
-                <span className="text-slateText-muted text-[10.5px]">
-                  Password: <span className="text-ink font-bold font-mono">password123</span>
-                </span>
-              </div>
-            </div>
-          </div> */}
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                Work email
+              <label htmlFor="login-email" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer flex items-center justify-between">
+                <span>Work email</span>
+                {fieldErrors.email && (
+                  <span className="text-accent text-[11px] font-semibold lowercase tracking-normal">
+                    {fieldErrors.email}
+                  </span>
+                )}
               </label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: undefined });
+                }}
                 placeholder="you@company.com"
                 required
-                className="h-10 px-3 bg-white border border-ink/40 text-sm focus:border-accent font-mono text-ink"
+                className={`h-10 px-3 bg-white border text-sm font-mono text-ink cursor-text ${
+                  fieldErrors.email ? 'border-accent ring-1 ring-accent' : 'border-ink/40 focus:border-ink'
+                }`}
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-ink">
-                Password
+              <label htmlFor="login-password" className="text-xs font-bold uppercase tracking-wider text-ink cursor-pointer flex items-center justify-between">
+                <span>Password</span>
+                {fieldErrors.password && (
+                  <span className="text-accent text-[11px] font-semibold lowercase tracking-normal">
+                    {fieldErrors.password}
+                  </span>
+                )}
               </label>
               <div className="relative">
                 <input
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: undefined });
+                  }}
                   required
                   placeholder="Enter your password"
-                  className="h-10 px-3 pr-10 w-full bg-white border border-ink/40 text-sm focus:border-accent font-mono text-ink"
+                  className={`h-10 px-3 pr-10 w-full bg-white border text-sm font-mono text-ink cursor-text ${
+                    fieldErrors.password ? 'border-accent ring-1 ring-accent' : 'border-ink/40 focus:border-ink'
+                  }`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5"
+                  className="absolute right-3 top-2.5 text-slateText-muted hover:text-ink transition-colors p-0.5 cursor-pointer"
                   title={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -140,7 +154,7 @@ export default function LoginPage() {
 
             {error && (
               <div className="flex items-center gap-2 p-2.5 bg-accent-tint border-l-2 border-accent text-accent-hover text-xs font-medium">
-                <AlertCircle size={14} />
+                <AlertCircle size={14} className="shrink-0" />
                 <span>{error}</span>
               </div>
             )}
@@ -148,7 +162,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="h-11 bg-accent text-white font-black text-sm flex items-center justify-center gap-2 hover:bg-accent-hover transition-colors shadow-sm"
+              className="h-11 bg-accent text-white font-black text-sm flex items-center justify-center gap-2 hover:bg-accent-hover transition-colors shadow-sm cursor-pointer disabled:opacity-50"
             >
               <span>{isLoading ? 'Signing in...' : 'Sign in to workspace'}</span>
               <ArrowRight size={16} />
