@@ -301,13 +301,14 @@ export default function UserManagementPage() {
 
                     <td className="p-3.5 whitespace-nowrap">
                       <select
-                        value={u.role === 'MANAGER' ? 'ADMIN' : u.role}
+                        value={u.role}
                         disabled={isRoot}
                         onChange={(e) => handleRoleChange(u.id, e.target.value as Role)}
                         className="h-8 px-2 bg-[#f3f2f2] border border-ink/30 text-xs font-bold focus:border-accent disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <option value="ADMIN">Admin / Manager</option>
                         <option value="TEAM_MEMBER">Team Member</option>
+                        <option value="MANAGER">Manager</option>
+                        <option value="ADMIN">Admin</option>
                       </select>
                     </td>
 
@@ -460,12 +461,13 @@ export default function UserManagementPage() {
                     Assigned Role
                   </label>
                   <select
-                    value={newUserRole === 'MANAGER' ? 'ADMIN' : newUserRole}
+                    value={newUserRole}
                     onChange={(e) => setNewUserRole(e.target.value as Role)}
                     className="h-10 px-2 bg-white border border-ink/30 text-xs font-bold text-ink focus:border-accent"
                   >
                     <option value="TEAM_MEMBER">Team Member</option>
-                    <option value="ADMIN">Admin / Manager</option>
+                    <option value="MANAGER">Manager</option>
+                    <option value="ADMIN">Admin</option>
                   </select>
                 </div>
 

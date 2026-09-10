@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { ArrowRight, AlertCircle, Eye, EyeOff, Lock, Shield } from 'lucide-react';
 
@@ -154,12 +155,19 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Notice: No public registration, users created only by admin */}
-          <div className="flex items-center gap-2.5 p-3 bg-[#eae9e9] border border-ink/30 text-[11.5px] text-slateText-secondary">
-            <Lock size={14} className="text-slateText-muted shrink-0" />
-            <span>
-              Self sign-up is disabled. All user accounts must be created directly by an Administrator in the Admin Portal.
-            </span>
+          {/* Member Registration Link */}
+          <div className="flex items-center justify-between p-3.5 bg-white border border-ink/40 text-xs shadow-2xs">
+            <div className="flex flex-col">
+              <span className="font-bold text-ink text-[12px]">New team member?</span>
+              <span className="text-slateText-muted text-[11px]">Register as a Member to submit reports</span>
+            </div>
+            <Link
+              href="/register"
+              className="h-8 px-3 bg-ink text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 hover:bg-black transition-colors"
+            >
+              <span>Register</span>
+              <ArrowRight size={13} />
+            </Link>
           </div>
         </div>
 

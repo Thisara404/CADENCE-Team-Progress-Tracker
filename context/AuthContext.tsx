@@ -100,11 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('cadence_user', JSON.stringify(merged));
   };
 
-  // Manager and Admin are unified into one role: ADMIN
-  const rawRole = user?.role || 'TEAM_MEMBER';
-  const role: Role = (rawRole === 'MANAGER' ? 'ADMIN' : rawRole) as Role;
+  // Distinct Roles: TEAM_MEMBER, MANAGER, ADMIN
+  const role: Role = (user?.role || 'TEAM_MEMBER') as Role;
   const isAdmin = role === 'ADMIN';
-  const isManager = role === 'ADMIN';
+  const isManager = role === 'MANAGER' || role === 'ADMIN';
 
   return (
     <AuthContext.Provider
