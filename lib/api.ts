@@ -1,6 +1,19 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+function resolveApiBaseUrl(): string {
+  let url = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').trim();
+  url = url.replace(/\/+$/, '');
+  if (!url.endsWith('/api')) {
+    url = `${url}/api`;
+  }
+  return url;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export class ApiClient {
+  static getBaseUrl(): string {
+    return API_BASE_URL;
+  }
+
   private static getToken(): string | null {
     if (typeof window === 'undefined') return null;
     return localStorage.getItem('cadence_token');
@@ -26,6 +39,11 @@ export class ApiClient {
     }
 
     return res.json();
+  }
+
+  // System & Diagnostics
+  static async healthCheck() {
+    return this.request<{ status: string; database?: string; timestamp?: string }>('/health');
   }
 
   // Auth
