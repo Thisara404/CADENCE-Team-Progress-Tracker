@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { mutate } from 'swr';
 import { useAuth } from '@/context/AuthContext';
 import { ApiClient } from '@/lib/api';
 import { TaskItem, TaskPriority, TaskStatus } from '@/lib/types';
@@ -15,14 +16,18 @@ import {
   Trophy,
   CheckCircle,
   Clock,
+  X,
+  Tag,
+  Sparkles,
 } from 'lucide-react';
+import { parseReviewComment } from '@/lib/review-feedback';
 import { WeeklyReportFormSkeleton } from '@/components/ui/Skeleton';
 
 function WeeklyReportFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
-  const { user } = useAuth();
+  const { user, role, isManager, isAdmin, isLoading: authLoading } = useAuth();
 
   const [projects, setProjects] = useState<any[]>([]);
   const [projectId, setProjectId] = useState<string>('');
@@ -34,6 +39,7 @@ function WeeklyReportFormContent() {
 
   const [status, setStatus] = useState<string>('DRAFT');
   const [managerComment, setManagerComment] = useState<string | null>(null);
+  const structuredFeedback = parseReviewComment(managerComment);
 
   // Tasks table
   const [tasks, setTasks] = useState<TaskItem[]>([
@@ -121,6 +127,77 @@ function WeeklyReportFormContent() {
     });
   }, [editId]);
 
+  // RBAC Guard: Admins and Managers cannot author or submit weekly reports
+  useEffect(() => {
+    if (!authLoading && (isAdmin || isManager || (role && role !== 'TEAM_MEMBER'))) {
+      router.replace('/reports/history');
+    }
+  }, [authLoading, isAdmin, isManager, role, router]);
+
+  // Listen for AI assistant internal tool autofill event & hydrate from sessionStorage
+  useEffect(() => {
+    const applyAutofill = (data: any) => {
+      if (!data) return;
+      if (data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
+        setTasks(
+          data.tasks.map((t: any) => ({
+            taskName: t.taskName || '',
+            priority: t.priority || 'MEDIUM',
+            status: t.status || 'IN_PROGRESS',
+            plannedPercentage: t.plannedPercentage ?? 100,
+            actualPercentage: t.actualPercentage ?? 0,
+            plannedHours: t.plannedHours ?? 4,
+            spentHours: t.spentHours ?? 0,
+            deliverableOutput: t.deliverableOutput || '',
+          }))
+        );
+      }
+      if (data.blockers && Array.isArray(data.blockers)) {
+        setBlockers(data.blockers);
+      }
+      if (data.keyBlockerIndex !== undefined && data.keyBlockerIndex !== null) {
+        setKeyBlockerIndex(data.keyBlockerIndex);
+      }
+      if (data.achievements && Array.isArray(data.achievements)) {
+        setAchievements(data.achievements);
+      }
+      if (data.keyAchievementIndex !== undefined && data.keyAchievementIndex !== null) {
+        setKeyAchievementIndex(data.keyAchievementIndex);
+      }
+      if (data.devHours !== undefined) setDevHours(Number(data.devHours));
+      if (data.testingHours !== undefined) setTestingHours(Number(data.testingHours));
+      if (data.meetingHours !== undefined) setMeetingHours(Number(data.meetingHours));
+      if (data.docHours !== undefined) setDocHours(Number(data.docHours));
+      if (data.tasksPlannedNextWeek) setTasksPlannedNextWeek(data.tasksPlannedNextWeek);
+
+      setFeedbackMsg({
+        type: 'ok',
+        text: `⚡ AI Assistant internal tool auto-filled ${data.tasks?.length || 0} tasks, blockers, achievements, and hours!`,
+      });
+    };
+
+    const handleCustomEvent = (e: any) => {
+      applyAutofill(e.detail);
+    };
+
+    window.addEventListener('cadence:ai-autofill', handleCustomEvent);
+
+    try {
+      const cached = sessionStorage.getItem('cadence_pending_autofill');
+      if (cached) {
+        sessionStorage.removeItem('cadence_pending_autofill');
+        const parsed = JSON.parse(cached);
+        applyAutofill(parsed);
+      }
+    } catch (err) {
+      console.error('Failed to parse cached autofill data:', err);
+    }
+
+    return () => {
+      window.removeEventListener('cadence:ai-autofill', handleCustomEvent);
+    };
+  }, []);
+
   // Add / remove task
   const addTask = () => {
     setTasks([
@@ -145,6 +222,12 @@ function WeeklyReportFormContent() {
   };
 
   const removeTask = (index: number) => {
+    const task = tasks[index];
+    if (task && task.taskName.trim().length > 0) {
+      if (!confirm(`Are you sure you want to remove the task "${task.taskName}"?`)) {
+        return;
+      }
+    }
     setTasks(tasks.filter((_, i) => i !== index));
   };
 
@@ -158,6 +241,12 @@ function WeeklyReportFormContent() {
     setBlockers(updated);
   };
   const removeBlocker = (index: number) => {
+    const val = blockers[index];
+    if (val && val.trim().length > 0) {
+      if (!confirm(`Are you sure you want to remove this blocker: "${val.trim()}"?`)) {
+        return;
+      }
+    }
     setBlockers(blockers.filter((_, i) => i !== index));
     if (keyBlockerIndex === index) setKeyBlockerIndex(null);
   };
@@ -172,6 +261,12 @@ function WeeklyReportFormContent() {
     setAchievements(updated);
   };
   const removeAchievement = (index: number) => {
+    const val = achievements[index];
+    if (val && val.trim().length > 0) {
+      if (!confirm(`Are you sure you want to remove this achievement: "${val.trim()}"?`)) {
+        return;
+      }
+    }
     setAchievements(achievements.filter((_, i) => i !== index));
     if (keyAchievementIndex === index) setKeyAchievementIndex(null);
   };
@@ -228,6 +323,22 @@ function WeeklyReportFormContent() {
     return true;
   };
 
+  // Helper to sanitize tasks (removes DB internal properties like id, reportVersionId)
+  const getSanitizedTasks = () => {
+    return tasks
+      .filter((t) => t.taskName && t.taskName.trim().length > 0)
+      .map((t) => ({
+        taskName: t.taskName.trim(),
+        priority: t.priority || 'MEDIUM',
+        status: t.status || 'TODO',
+        plannedPercentage: Math.min(100, Math.max(0, Number(t.plannedPercentage) || 0)),
+        actualPercentage: Math.min(100, Math.max(0, Number(t.actualPercentage) || 0)),
+        plannedHours: Math.max(0, Number(t.plannedHours) || 0),
+        spentHours: Math.max(0, Number(t.spentHours) || 0),
+        deliverableOutput: t.deliverableOutput?.trim() || undefined,
+      }));
+  };
+
   // Save Draft (Private WIP for team member)
   const handleSaveDraft = async () => {
     if (!validateReport(true)) return;
@@ -250,13 +361,14 @@ function WeeklyReportFormContent() {
       meetingHours: Math.max(0, Number(meetingHours) || 0),
       docHours: Math.max(0, Number(docHours) || 0),
       notes,
-      tasks: tasks.filter((t) => t.taskName.trim().length > 0),
+      tasks: getSanitizedTasks(),
     };
 
     try {
       const res = await ApiClient.saveDraft(payload);
       if (res && res.id) setReportId(res.id);
       setStatus('DRAFT');
+      await mutate((key) => true, undefined, { revalidate: true });
       setFeedbackMsg({
         type: 'ok',
         text: 'Report saved as private draft. Managers cannot see or review drafts until you submit.',
@@ -268,10 +380,17 @@ function WeeklyReportFormContent() {
     }
   };
 
-  // Submit Report (Formal submission for manager review)
-  const handleSubmitReport = async () => {
-    if (!validateReport(false)) return;
+  const [showSubmitConfirmModal, setShowSubmitConfirmModal] = useState(false);
 
+  // Open confirmation modal after client validation
+  const handleOpenSubmitConfirm = () => {
+    if (!validateReport(false)) return;
+    setShowSubmitConfirmModal(true);
+  };
+
+  // Formal submission executed after user confirms modal
+  const executeSubmitReport = async () => {
+    setShowSubmitConfirmModal(false);
     setIsLoading(true);
     setFeedbackMsg(null);
 
@@ -289,7 +408,7 @@ function WeeklyReportFormContent() {
       meetingHours: Math.max(0, Number(meetingHours) || 0),
       docHours: Math.max(0, Number(docHours) || 0),
       notes,
-      tasks: tasks.filter((t) => t.taskName.trim().length > 0),
+      tasks: getSanitizedTasks(),
     };
 
     try {
@@ -300,6 +419,7 @@ function WeeklyReportFormContent() {
       }
       await ApiClient.submitReport(activeId!, payload);
       setStatus('SUBMITTED');
+      await mutate((key) => true, undefined, { revalidate: true });
       setFeedbackMsg({
         type: 'ok',
         text: 'Report submitted successfully! Your manager has been notified for review.',
@@ -322,6 +442,20 @@ function WeeklyReportFormContent() {
     (Number(testingHours) || 0) +
     (Number(meetingHours) || 0) +
     (Number(docHours) || 0);
+
+  if (!authLoading && (isAdmin || isManager || (role && role !== 'TEAM_MEMBER'))) {
+    return (
+      <div className="p-8 bg-white border-2 border-ink text-center flex flex-col items-center justify-center gap-3 shadow-sm my-8">
+        <AlertTriangle className="text-accent" size={32} />
+        <h2 className="text-base font-black text-ink uppercase tracking-wide">
+          Access Restricted: Team Members Only
+        </h2>
+        <p className="text-xs text-slateText-secondary max-w-md">
+          Admins and Managers cannot author or submit weekly reports. Redirecting to Reports History...
+        </p>
+      </div>
+    );
+  }
 
   if (isInitialLoading) {
     return <WeeklyReportFormSkeleton />;
@@ -370,9 +504,9 @@ function WeeklyReportFormContent() {
           </button>
 
           <button
-            onClick={handleSubmitReport}
+            onClick={handleOpenSubmitConfirm}
             disabled={isLoading || status === 'SUBMITTED' || status === 'APPROVED'}
-            className="flex items-center gap-1.5 h-10 px-5 bg-accent text-white text-xs font-black hover:bg-accent-hover disabled:opacity-50 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 h-10 px-5 bg-accent text-white text-xs font-black hover:bg-accent-hover disabled:opacity-50 transition-colors shadow-sm cursor-pointer"
           >
             <Send size={14} />
             <span>
@@ -396,21 +530,106 @@ function WeeklyReportFormContent() {
         </div>
       )}
 
-      {/* Needs Correction Feedback Alert */}
-      {status === 'NEEDS_CORRECTION' && managerComment && (
-        <div className="p-4 bg-accent-tint border-2 border-accent flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-accent-hover text-xs font-black uppercase tracking-wider">
-            <AlertTriangle size={16} />
-            <span>Manager Feedback — Changes Requested</span>
+      {/* Needs Correction Structured Feedback Directives */}
+      {status === 'NEEDS_CORRECTION' && managerComment && (() => {
+        const structuredFeedback = parseReviewComment(managerComment);
+        return (
+          <div className="p-5 bg-accent-tint border-2 border-accent flex flex-col gap-3 shadow-sm">
+            <div className="flex items-center justify-between border-b border-accent/30 pb-2">
+              <div className="flex items-center gap-2 text-accent-hover text-xs font-black uppercase tracking-wider">
+                <AlertTriangle size={18} />
+                <span>Manager Revision Directives — Changes Requested</span>
+              </div>
+              <span className="text-[10px] font-mono font-black uppercase bg-accent text-white px-2 py-0.5">
+                Action Required
+              </span>
+            </div>
+
+            {/* Overall Summary */}
+            {structuredFeedback.summary && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slateText-muted">
+                  Revision Summary
+                </span>
+                <p className="text-xs font-semibold text-ink bg-white p-3 border border-accent/40 leading-relaxed italic">
+                  "{structuredFeedback.summary}"
+                </p>
+              </div>
+            )}
+
+            {/* Specific Flagged Tasks */}
+            {structuredFeedback.taskFeedback && structuredFeedback.taskFeedback.length > 0 && (
+              <div className="flex flex-col gap-1.5 pt-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-accent flex items-center gap-1.5">
+                  <Tag size={13} />
+                  <span>Specific Tasks Flagged for Revision ({structuredFeedback.taskFeedback.length}):</span>
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {structuredFeedback.taskFeedback.map((tf, i) => (
+                    <div key={i} className="p-2.5 bg-white border border-accent flex flex-col gap-1 text-xs">
+                      <div className="flex items-center justify-between font-bold text-ink">
+                        <span>• {tf.taskName}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {tf.tags?.map((tag, ti) => (
+                            <span key={ti} className="px-1.5 py-0.2 bg-accent text-white text-[9px] font-bold">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {tf.note && (
+                        <p className="text-[11px] text-ink/90 italic pl-2 border-l-2 border-accent">
+                          Directive: {tf.note}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Blocker Directives */}
+            {structuredFeedback.blockerFeedback && structuredFeedback.blockerFeedback.length > 0 && (
+              <div className="flex flex-col gap-1.5 pt-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-ink flex items-center gap-1.5">
+                  <AlertTriangle size={13} className="text-accent" />
+                  <span>Manager Blocker Directives ({structuredFeedback.blockerFeedback.length}):</span>
+                </span>
+                <div className="flex flex-col gap-1.5">
+                  {structuredFeedback.blockerFeedback.map((bf, i) => (
+                    <div key={i} className="p-2 bg-white border border-ink/20 text-xs">
+                      <span className="font-semibold text-slateText-secondary block">Blocker: "{bf.blocker}"</span>
+                      <span className="font-bold text-ink block mt-0.5">Manager Directive: {bf.note}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Highlight Commendations */}
+            {structuredFeedback.highlightFeedback && structuredFeedback.highlightFeedback.length > 0 && (
+              <div className="flex flex-col gap-1.5 pt-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#166534] flex items-center gap-1.5">
+                  <Sparkles size={13} />
+                  <span>Manager Commendations ({structuredFeedback.highlightFeedback.length}):</span>
+                </span>
+                <div className="flex flex-col gap-1.5">
+                  {structuredFeedback.highlightFeedback.map((hf, i) => (
+                    <div key={i} className="p-2 bg-white border border-[#166534]/40 text-xs">
+                      <span className="font-semibold text-slateText-secondary block">Achievement: "{hf.highlight}"</span>
+                      <span className="font-bold text-[#166534] block mt-0.5">Praise: {hf.note}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <span className="text-[11px] text-slateText-secondary pt-1 border-t border-accent/20">
+              Please revise the highlighted deliverables or hours below, then click <b>Resubmit for Review</b>. A new version snapshot will be archived.
+            </span>
           </div>
-          <p className="text-sm font-medium text-ink bg-white p-3 border border-accent/40 italic">
-            "{managerComment}"
-          </p>
-          <span className="text-[11px] text-slateText-secondary">
-            Please revise the highlighted deliverables or hours below, then click <b>Resubmit for Review</b>. A new version snapshot will be archived.
-          </span>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Approved Lock Alert */}
       {status === 'APPROVED' && (
@@ -517,17 +736,52 @@ function WeeklyReportFormContent() {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/20">
-              {tasks.map((task, idx) => (
-                <tr key={idx} className="hover:bg-[#f8f7f7]">
-                  <td className="p-2">
-                    <input
-                      type="text"
-                      value={task.taskName}
-                      onChange={(e) => updateTask(idx, 'taskName', e.target.value)}
-                      placeholder="e.g. Navigation drawer gesture handling"
-                      className="w-full h-8 px-2 bg-[#f3f2f2] border border-ink/30 text-xs font-medium"
-                    />
-                  </td>
+              {tasks.map((task, idx) => {
+                const flaggedDirective =
+                  status === 'NEEDS_CORRECTION'
+                    ? structuredFeedback.taskFeedback?.find(
+                        (tf) =>
+                          tf.taskName.trim().length > 0 &&
+                          task.taskName.trim().length > 0 &&
+                          tf.taskName.trim().toLowerCase() === task.taskName.trim().toLowerCase()
+                      )
+                    : null;
+
+                return (
+                  <tr
+                    key={idx}
+                    className={`transition-colors ${
+                      flaggedDirective ? 'bg-accent-tint/30 hover:bg-accent-tint/40' : 'hover:bg-[#f8f7f7]'
+                    }`}
+                  >
+                    <td className="p-2">
+                      {flaggedDirective && (
+                        <div className="mb-1 p-1 px-1.5 bg-accent text-white text-[9.5px] font-black flex flex-wrap items-center justify-between gap-1 shadow-xs">
+                          <span className="flex items-center gap-1">
+                            <AlertTriangle size={11} className="shrink-0" />
+                            <span>Flagged by Manager: {flaggedDirective.note || 'Revision required'}</span>
+                          </span>
+                          {flaggedDirective.tags && flaggedDirective.tags.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              {flaggedDirective.tags.map((tag, ti) => (
+                                <span key={ti} className="bg-black/30 px-1 py-0.2 rounded text-[8.5px] uppercase font-mono">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <input
+                        type="text"
+                        value={task.taskName}
+                        onChange={(e) => updateTask(idx, 'taskName', e.target.value)}
+                        placeholder="e.g. Navigation drawer gesture handling"
+                        className={`w-full h-8 px-2 bg-[#f3f2f2] border text-xs font-medium ${
+                          flaggedDirective ? 'border-accent font-bold ring-1 ring-accent' : 'border-ink/30'
+                        }`}
+                      />
+                    </td>
                   <td className="p-2">
                     <select
                       value={task.priority}
@@ -611,7 +865,8 @@ function WeeklyReportFormContent() {
                     </button>
                   </td>
                 </tr>
-              ))}
+              );
+            })}
             </tbody>
           </table>
         </div>
@@ -865,14 +1120,84 @@ function WeeklyReportFormContent() {
           Save as Draft
         </button>
         <button
-          onClick={handleSubmitReport}
+          onClick={handleOpenSubmitConfirm}
           disabled={isLoading || status === 'SUBMITTED' || status === 'APPROVED'}
-          className="h-10 px-6 bg-accent text-white text-xs font-black hover:bg-accent-hover disabled:opacity-50 transition-colors shadow-sm flex items-center gap-2"
+          className="h-10 px-6 bg-accent text-white text-xs font-black hover:bg-accent-hover disabled:opacity-50 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
         >
           <Send size={14} />
           <span>{status === 'NEEDS_CORRECTION' ? 'Resubmit for Review' : 'Submit Report'}</span>
         </button>
       </div>
+
+      {/* Submit Confirmation Modal */}
+      {showSubmitConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-[#f3f2f2] border-2 border-ink max-w-md w-full p-6 flex flex-col gap-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-ink/30 pb-3">
+              <h3 className="text-sm font-black uppercase tracking-wider text-ink flex items-center gap-2">
+                <Send size={16} className="text-accent" />
+                <span>Confirm Report Submission</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowSubmitConfirmModal(false)}
+                className="p-1 text-slateText-secondary hover:text-ink cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50 border-2 border-amber-400 text-amber-900 text-xs flex items-start gap-2">
+              <AlertTriangle size={18} className="text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Are you sure you want to submit this weekly report?</p>
+                <p className="mt-1 text-amber-800">
+                  Once submitted, your engineering manager will be notified for review, and this report will be locked against direct edits.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Summary Box */}
+            <div className="bg-white border border-ink/30 p-3 text-xs flex flex-col gap-2 font-mono">
+              <div className="flex justify-between border-b border-ink/10 pb-1">
+                <span className="text-slateText-muted">Category:</span>
+                <span className="font-bold text-ink">{projects.find((p) => p.id === projectId)?.name || 'Selected Project'}</span>
+              </div>
+              <div className="flex justify-between border-b border-ink/10 pb-1">
+                <span className="text-slateText-muted">Cycle:</span>
+                <span className="font-bold text-ink">{weekStartDate} &rarr; {weekEndDate}</span>
+              </div>
+              <div className="flex justify-between border-b border-ink/10 pb-1">
+                <span className="text-slateText-muted">Tasks Completed:</span>
+                <span className="font-bold text-ink">{tasks.filter((t) => t.taskName.trim().length > 0).length} tasks</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slateText-muted">Total Hours Logged:</span>
+                <span className="font-bold text-accent">{totalLoggedHours}h</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-ink/20">
+              <button
+                type="button"
+                onClick={() => setShowSubmitConfirmModal(false)}
+                className="px-4 py-2 bg-white border border-ink/40 text-xs font-bold text-ink hover:bg-[#eae9e9] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeSubmitReport}
+                disabled={isLoading}
+                className="px-5 py-2 bg-accent text-white text-xs font-black uppercase tracking-wider hover:bg-accent-hover transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Send size={13} />
+                <span>{isLoading ? 'Submitting…' : 'Yes, Submit Report'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

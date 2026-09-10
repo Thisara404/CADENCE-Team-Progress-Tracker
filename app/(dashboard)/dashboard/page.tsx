@@ -20,6 +20,8 @@ import {
   Calendar,
 } from 'lucide-react';
 
+import useSWR from 'swr';
+
 const emptySummary: DashboardSummary = {
   totalMembers: 0,
   totalSubmitted: 0,
@@ -41,24 +43,21 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, isManager } = useAuth();
 
-  const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
-  const [charts, setCharts] = useState<DashboardCharts>(emptyCharts);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
-  const [recentReports, setRecentReports] = useState<any[]>([]);
-
   // Filter states
   const [selectedWeek, setSelectedWeek] = useState('ALL');
   const [selectedProject, setSelectedProject] = useState('ALL');
   const [selectedMember, setSelectedMember] = useState('ALL');
-  const [isLoading, setIsLoading] = useState(true);
 
-  const loadDashboard = async () => {
-    setIsLoading(true);
-    try {
+  const { data: dashboardData, isLoading } = useSWR(
+    ['dashboard-data', selectedWeek, selectedProject, selectedMember],
+    async () => {
       const [sumRes, chartsRes, projsRes, repsRes, usersRes] = await Promise.all([
         ApiClient.getDashboardSummary(selectedWeek !== 'ALL' ? selectedWeek : undefined),
-        ApiClient.getDashboardCharts(),
+        ApiClient.getDashboardCharts({
+          week: selectedWeek !== 'ALL' ? selectedWeek : undefined,
+          projectId: selectedProject !== 'ALL' ? selectedProject : undefined,
+          memberId: selectedMember !== 'ALL' ? selectedMember : undefined,
+        }),
         ApiClient.getProjects(),
         ApiClient.getReports({
           week: selectedWeek !== 'ALL' ? selectedWeek : undefined,
@@ -68,23 +67,26 @@ export default function DashboardPage() {
         ApiClient.getUsers().catch(() => []),
       ]);
 
-      if (sumRes) setSummary(sumRes);
-      if (chartsRes) setCharts(chartsRes);
-      if (projsRes && projsRes.length) setProjects(projsRes);
-      if (repsRes?.reports) setRecentReports(repsRes.reports);
-      if (usersRes && usersRes.length) {
-        setMembers(usersRes.filter((u: any) => u.role === 'TEAM_MEMBER'));
-      }
-    } catch (err) {
-      console.error('Failed to load dashboard data from database:', err);
-    } finally {
-      setIsLoading(false);
+      return {
+        summary: sumRes || emptySummary,
+        charts: chartsRes || emptyCharts,
+        projects: projsRes || [],
+        recentReports: repsRes?.reports || [],
+        members: usersRes ? usersRes.filter((u: any) => u.role === 'TEAM_MEMBER') : [],
+      };
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
     }
-  };
+  );
 
-  useEffect(() => {
-    loadDashboard();
-  }, [selectedWeek, selectedProject, selectedMember]);
+  const summary = dashboardData?.summary || emptySummary;
+  const charts = dashboardData?.charts || emptyCharts;
+  const projects = dashboardData?.projects || [];
+  const members = dashboardData?.members || [];
+  const recentReports = dashboardData?.recentReports || [];
 
   const resetFilters = () => {
     setSelectedWeek('ALL');
@@ -128,7 +130,7 @@ export default function DashboardPage() {
     },
   ];
 
-  if (isLoading) {
+  if (isLoading && !dashboardData) {
     return <DashboardSkeleton />;
   }
 
@@ -410,7 +412,7 @@ export default function DashboardPage() {
                     const compTextY = isClose && yComp > yPlan ? yComp + 12 : yComp - 7;
 
                     return (
-                      <g key={d.weekLabel}>
+                      <g key={d.weekDate ? `${d.weekDate}-${i}` : `week-${d.weekLabel}-${i}`}>
                         {/* Planned Data Dot */}
                         <circle
                           cx={x}

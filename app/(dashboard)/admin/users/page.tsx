@@ -1,7 +1,9 @@
 'use client';
-
 import React, { useState, useEffect } from 'react';
+import useSWR, { mutate } from 'swr';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import { ApiClient } from '@/lib/api';
 import { User, Role } from '@/lib/types';
 import {
@@ -19,12 +21,35 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { UsersSkeleton } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 
 export default function UserManagementPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const { user: currentUser, isAdmin, isLoading: authLoading } = useAuth();
   const [notification, setNotification] = useState('');
   const [errorBanner, setErrorBanner] = useState('');
+  const [localUsers, setLocalUsers] = useState<User[] | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      router.replace('/dashboard');
+    }
+  }, [authLoading, isAdmin, router]);
+
+  const { data: usersData, isLoading, error: swrError, mutate: refetchUsers } = useSWR<User[]>(
+    'admin-users-list',
+    () => ApiClient.getUsers(),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
+    }
+  );
+
+  const users = localUsers || usersData || [];
+  const paginatedUsers = users.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // Create User Modal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -51,28 +76,28 @@ export default function UserManagementPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    try {
-      const data = await ApiClient.getUsers();
-      setUsers(data || []);
-    } catch (err: any) {
-      setErrorBanner(err.message || 'Failed to fetch users from database.');
-      setUsers([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+
+  const isCurrentRootAdmin =
+    currentUser?.id === 'u-admin-root' ||
+    currentUser?.email?.toLowerCase() === 'admin@cadence.com';
 
   const isRootAdmin = (u: User) => {
     return (
       u.id === 'u-admin-root' ||
       u.email.toLowerCase() === 'admin@cadence.com'
     );
+  };
+
+  const canChangePassword = (target: User) => {
+    // A user can always change their own password
+    if (target.id === currentUser?.id) return true;
+    // Managers cannot change others' passwords
+    if (!isAdmin) return false;
+    // If target is root admin, only root admin can change it
+    if (isRootAdmin(target) && !isCurrentRootAdmin) return false;
+    // Root admin and admins can change others
+    return true;
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -112,7 +137,8 @@ export default function UserManagementPage() {
             ? 'Engineering Manager / Administrator'
             : 'Software Engineer'),
       });
-      await fetchUsers();
+      setLocalUsers(null);
+      await mutate('admin-users-list');
       setNotification(`User ${trimmedName} created with password. They can now log in.`);
       setCreateModalOpen(false);
     } catch (err: any) {
@@ -123,6 +149,7 @@ export default function UserManagementPage() {
   };
 
   const handleOpenResetModal = (u: User) => {
+    if (!canChangePassword(u)) return;
     setSelectedUser(u);
     setNewResetPassword('');
     setResetError('');
@@ -132,6 +159,10 @@ export default function UserManagementPage() {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
+    if (!canChangePassword(selectedUser)) {
+      setResetError("You do not have permission to change this user's password.");
+      return;
+    }
     if (!newResetPassword || newResetPassword.length < 6) {
       setResetError('New password must be at least 6 characters long.');
       return;
@@ -160,7 +191,8 @@ export default function UserManagementPage() {
     setIsDeleting(true);
     try {
       await ApiClient.deleteUser(userToDelete.id);
-      await fetchUsers();
+      setLocalUsers(null);
+      await mutate('admin-users-list');
       setNotification(`User ${userToDelete.fullName} has been deleted.`);
       setDeleteModalOpen(false);
     } catch (err: any) {
@@ -174,10 +206,11 @@ export default function UserManagementPage() {
   const handleRoleChange = async (userId: string, newRole: Role) => {
     try {
       await ApiClient.updateUserRole(userId, newRole);
-      fetchUsers();
+      setLocalUsers(null);
+      await mutate('admin-users-list');
       setNotification('User role updated successfully.');
     } catch {
-      setUsers(
+      setLocalUsers(
         users.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
       );
     }
@@ -186,14 +219,28 @@ export default function UserManagementPage() {
   const handleToggleStatus = async (userId: string) => {
     try {
       await ApiClient.toggleUserStatus(userId);
-      fetchUsers();
+      setLocalUsers(null);
+      await mutate('admin-users-list');
       setNotification('User status toggled.');
     } catch (err: any) {
       setErrorBanner(err.message || 'Could not change status.');
     }
   };
 
-  if (isLoading) {
+  if (!authLoading && !isAdmin) {
+    return (
+      <div className="p-12 text-center bg-white border-2 border-ink/40 my-8 shadow-sm">
+        <h2 className="text-sm font-black uppercase tracking-wider text-accent">
+          Access Restricted
+        </h2>
+        <p className="text-xs text-slateText-secondary mt-2 font-mono">
+          Administrator privileges are required to access user and role management. Redirecting to dashboard...
+        </p>
+      </div>
+    );
+  }
+
+  if (isLoading && !usersData && !localUsers) {
     return <UsersSkeleton />;
   }
 
@@ -231,47 +278,71 @@ export default function UserManagementPage() {
         </button>
       </div>
 
+      {/* Notifications */}
       {notification && (
-        <div className="p-3 bg-[#dcfce7] border border-[#166534] text-[#166534] text-xs font-semibold flex items-center justify-between gap-2">
+        <div className="p-3.5 bg-[#dcfce7] border-2 border-green-700 text-green-900 text-xs font-bold flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <CheckCircle size={14} />
+            <CheckCircle size={16} className="text-green-700 flex-shrink-0" />
             <span>{notification}</span>
           </div>
-          <button onClick={() => setNotification('')} className="p-0.5 hover:opacity-75">
-            <X size={13} />
+          <button
+            onClick={() => setNotification('')}
+            className="text-green-900 hover:text-green-700 text-sm font-black"
+          >
+            ×
           </button>
         </div>
       )}
 
       {errorBanner && (
-        <div className="p-3 bg-[#fee2e2] border border-[#991b1b] text-[#991b1b] text-xs font-semibold flex items-center justify-between gap-2">
+        <div className="p-3.5 bg-[#fee2e2] border-2 border-accent text-accent text-xs font-bold flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <AlertTriangle size={14} />
+            <AlertTriangle size={16} className="text-accent flex-shrink-0" />
             <span>{errorBanner}</span>
           </div>
-          <button onClick={() => setErrorBanner('')} className="p-0.5 hover:opacity-75">
-            <X size={13} />
+          <button
+            onClick={() => setErrorBanner('')}
+            className="text-accent hover:text-ink text-sm font-black"
+          >
+            ×
           </button>
         </div>
       )}
 
-      {/* Users Table */}
-      <div className="border-2 border-ink/40 bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+      {/* Users Data Table */}
+      <div className="border-2 border-ink/40 bg-[#eae9e9] shadow-sm">
+        <div className="p-3 border-b-2 border-ink/40 flex items-center justify-between bg-[#eae9e9]">
+          <span className="text-xs font-black uppercase tracking-wider text-ink flex items-center gap-2">
+            <Users size={14} />
+            <span>Workspace Personnel ({users.length} Active Accounts)</span>
+          </span>
+          <span className="text-[11px] font-mono text-slateText-muted">
+            Click user name to view performance metrics
+          </span>
+        </div>
+
+        <div className="overflow-x-auto bg-white">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-[#eae9e9] border-b-2 border-ink/40 text-[11px] font-black uppercase tracking-wider text-ink whitespace-nowrap">
-                <th className="p-3.5">User</th>
-                <th className="p-3.5">Work Email</th>
-                <th className="p-3.5">Department</th>
-                <th className="p-3.5">Assigned Role</th>
-                <th className="p-3.5">Reports</th>
-                <th className="p-3.5">Status</th>
-                <th className="p-3.5 text-right">Actions</th>
+              <tr className="border-b-2 border-ink/40 bg-[#eae9e9] text-ink font-mono uppercase tracking-wider text-[11px]">
+                <th className="p-3.5 font-black">User Profile</th>
+                <th className="p-3.5 font-black">Email</th>
+                <th className="p-3.5 font-black">Department</th>
+                <th className="p-3.5 font-black">Role / Access Level</th>
+                <th className="p-3.5 font-black">Velocity</th>
+                <th className="p-3.5 font-black">Status</th>
+                <th className="p-3.5 font-black text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/20">
-              {users.map((u) => {
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-xs text-slateText-secondary font-medium">
+                    No user accounts found. Click &quot;Create User Account&quot; above to register new users.
+                  </td>
+                </tr>
+              ) : (
+                paginatedUsers.map((u) => {
                 const isRoot = isRootAdmin(u);
 
                 return (
@@ -345,15 +416,30 @@ export default function UserManagementPage() {
 
                     <td className="p-3.5 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5 justify-end">
-                        {/* Password Change Option for every user */}
-                        <button
-                          onClick={() => handleOpenResetModal(u)}
-                          className="px-2 py-1 text-[11px] font-bold border border-ink/40 bg-white text-ink hover:bg-[#eae9e9] transition-colors flex items-center gap-1 shadow-2xs"
-                          title={`Reset password for ${u.fullName}`}
-                        >
-                          <KeyRound size={11} className="text-slateText-secondary" />
-                          <span>Change PW</span>
-                        </button>
+                        {/* Password Change Option */}
+                        {canChangePassword(u) ? (
+                          <button
+                            onClick={() => handleOpenResetModal(u)}
+                            className="px-2 py-1 text-[11px] font-bold border border-ink/40 bg-white text-ink hover:bg-[#eae9e9] transition-colors flex items-center gap-1 shadow-2xs"
+                            title={`Change password for ${u.fullName}`}
+                          >
+                            <KeyRound size={11} className="text-slateText-secondary" />
+                            <span>Change PW</span>
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="px-2 py-1 text-[11px] font-bold border border-ink/20 bg-[#eae9e9] text-slateText-muted cursor-not-allowed opacity-60 flex items-center gap-1"
+                            title={
+                              !isAdmin
+                                ? "Managers cannot change other users' passwords"
+                                : "Primary root administrator password cannot be changed by other administrators"
+                            }
+                          >
+                            <Lock size={11} className="text-slateText-muted" />
+                            <span>Change PW</span>
+                          </button>
+                        )}
 
                         {/* Status Toggle (Root Admin cannot be suspended) */}
                         {!isRoot ? (
@@ -393,10 +479,19 @@ export default function UserManagementPage() {
                     </td>
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          currentPage={currentPage}
+          totalItems={users.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          itemName="user accounts"
+        />
       </div>
 
       {/* Create User Account Modal */}

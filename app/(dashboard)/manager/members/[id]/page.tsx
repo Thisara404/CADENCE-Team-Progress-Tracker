@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import { ApiClient } from '@/lib/api';
 import { formatDateRange } from '@/lib/utils';
 import {
@@ -21,24 +22,17 @@ export default function MemberProfilePage() {
   const id = params?.id as string;
   const router = useRouter();
 
-  const [profile, setProfile] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (id) {
-      ApiClient.getUserProfile(id)
-        .then((data) => setProfile(data))
-        .catch((err) => {
-          console.error('Failed to load user profile from database:', err);
-          setError('Member profile not found in database.');
-        })
-        .finally(() => setIsLoading(false));
+  const { data: profile, isLoading, error } = useSWR(
+    id ? ['user-profile', id] : null,
+    () => ApiClient.getUserProfile(id),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
     }
-  }, [id]);
+  );
 
-  if (isLoading) {
+  if (isLoading && !profile) {
     return <MemberProfileSkeleton />;
   }
 

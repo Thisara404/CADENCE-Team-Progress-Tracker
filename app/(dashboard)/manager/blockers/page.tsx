@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import useSWR from 'swr';
 import { ApiClient } from '@/lib/api';
 import {
   AlertTriangle,
@@ -12,33 +13,37 @@ import {
   Layers,
 } from 'lucide-react';
 import { BlockersSkeleton } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 
 export default function SideBySideBlockersPage() {
   const [selectedWeek, setSelectedWeek] = useState('ALL');
   const [activeTab, setActiveTab] = useState<'blockers' | 'achievements' | 'both'>('both');
-  const [items, setItems] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 9;
 
-  const fetchItems = async () => {
-    setIsLoading(true);
-    try {
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedWeek, activeTab]);
+
+  const { data: itemsData, isLoading } = useSWR(
+    ['manager-blockers', selectedWeek],
+    async () => {
       const data = await ApiClient.getBlockersAndAchievements(
         selectedWeek !== 'ALL' ? selectedWeek : undefined,
       );
-      setItems(data || []);
-    } catch (err) {
-      console.error('Failed to load blockers/achievements from database:', err);
-      setItems([]);
-    } finally {
-      setIsLoading(false);
+      return data || [];
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
     }
-  };
+  );
 
-  useEffect(() => {
-    fetchItems();
-  }, [selectedWeek]);
+  const items = itemsData || [];
+  const paginatedItems = items.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  if (isLoading) {
+  if (isLoading && !itemsData) {
     return <BlockersSkeleton />;
   }
 
@@ -105,130 +110,152 @@ export default function SideBySideBlockersPage() {
         </select>
       </div>
 
-      {/* Side-by-Side Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {items.map((item, idx) => (
-          <div
-            key={idx}
-            className="bg-white border-2 border-ink/40 flex flex-col justify-between shadow-sm"
-          >
-            {/* Card Header */}
-            <div className="p-4 border-b border-ink/20 flex items-center justify-between bg-[#f8f7f7]">
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-6 h-6 text-white text-[10px] font-black grid place-items-center"
-                  style={{ backgroundColor: item.user?.avatarColor || '#2563eb' }}
-                >
-                  {item.user?.fullName?.[0] || 'U'}
-                </span>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-ink">{item.user?.fullName}</span>
-                  <span className="text-[10.5px] text-slateText-muted font-mono">{item.project?.name}</span>
+      {/* Side-by-Side Cards Grid or Empty State */}
+      {items.length === 0 ? (
+        <div className="p-12 bg-white border-2 border-ink/40 text-center flex flex-col items-center justify-center gap-2 shadow-sm">
+          <span className="text-xs font-black uppercase tracking-wider text-ink">
+            No Entries Found
+          </span>
+          <p className="text-xs text-slateText-secondary">
+            No team member blockers or achievements match the selected sprint period.
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {paginatedItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="bg-white border-2 border-ink/40 flex flex-col justify-between shadow-sm"
+              >
+                {/* Card Header */}
+                <div className="p-4 border-b border-ink/20 flex items-center justify-between bg-[#f8f7f7]">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-6 h-6 text-white text-[10px] font-black grid place-items-center"
+                      style={{ backgroundColor: item.user?.avatarColor || '#2563eb' }}
+                    >
+                      {item.user?.fullName?.[0] || 'U'}
+                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-ink">{item.user?.fullName}</span>
+                      <span className="text-[10.5px] text-slateText-muted font-mono">{item.project?.name}</span>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`px-2 py-0.5 text-[9.5px] font-black uppercase border ${
+                      item.status === 'APPROVED'
+                        ? 'bg-[#dcfce7] text-[#166534] border-[#166534]'
+                        : item.status === 'SUBMITTED'
+                        ? 'bg-[#dbeafe] text-[#1e40af] border-[#1e40af]'
+                        : 'bg-accent-tint text-accent-hover border-accent'
+                    }`}
+                  >
+                    {item.status.replace('_', ' ')}
+                  </span>
+                </div>
+
+                {/* Content Sections */}
+                <div className="p-4 flex flex-col gap-4 flex-1">
+                  {/* Blockers */}
+                  {(activeTab === 'both' || activeTab === 'blockers') && (
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[10.5px] font-black uppercase tracking-wider text-accent flex items-center gap-1">
+                        <AlertTriangle size={13} />
+                        <span>Blockers / Challenges</span>
+                      </span>
+
+                      {item.blockers?.length === 0 ? (
+                        <span className="text-xs text-slateText-muted italic">No blockers logged.</span>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {item.blockers.map((b: string, i: number) => {
+                            const isKey = item.keyBlockerIndex === i;
+                            return (
+                              <div
+                                key={i}
+                                className={`p-2 text-xs border leading-relaxed ${
+                                  isKey
+                                    ? 'bg-accent-tint border-accent text-accent-hover font-bold'
+                                    : 'bg-[#f8f7f7] border-ink/20 text-ink'
+                                }`}
+                              >
+                                {isKey && (
+                                  <span className="text-[9px] font-black uppercase bg-accent text-white px-1.5 py-0.5 mr-1.5">
+                                    Key Issue
+                                  </span>
+                                )}
+                                <span>{b}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Achievements */}
+                  {(activeTab === 'both' || activeTab === 'achievements') && (
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[10.5px] font-black uppercase tracking-wider text-[#d97706] flex items-center gap-1">
+                        <Trophy size={13} />
+                        <span>Achievements & Highlights</span>
+                      </span>
+
+                      {item.achievements?.length === 0 ? (
+                        <span className="text-xs text-slateText-muted italic">No highlights entered.</span>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {item.achievements.map((a: string, i: number) => {
+                            const isKey = item.keyAchievementIndex === i;
+                            return (
+                              <div
+                                key={i}
+                                className={`p-2 text-xs border leading-relaxed ${
+                                  isKey
+                                    ? 'bg-[#fef3c7] border-[#d97706] text-[#92400e] font-bold'
+                                    : 'bg-[#f8f7f7] border-ink/20 text-ink'
+                                }`}
+                              >
+                                {isKey && (
+                                  <span className="text-[9px] font-black uppercase bg-[#d97706] text-white px-1.5 py-0.5 mr-1.5">
+                                    Key
+                                  </span>
+                                )}
+                                <span>{a}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-3 bg-[#f8f7f7] border-t border-ink/20 flex justify-end">
+                  <Link
+                    href={`/reports/${item.reportId}`}
+                    className="text-xs font-bold text-ink hover:text-accent underline"
+                  >
+                    Inspect Full Report
+                  </Link>
                 </div>
               </div>
-
-              <span
-                className={`px-2 py-0.5 text-[9.5px] font-black uppercase border ${
-                  item.status === 'APPROVED'
-                    ? 'bg-[#dcfce7] text-[#166534] border-[#166534]'
-                    : item.status === 'SUBMITTED'
-                    ? 'bg-[#dbeafe] text-[#1e40af] border-[#1e40af]'
-                    : 'bg-accent-tint text-accent-hover border-accent'
-                }`}
-              >
-                {item.status.replace('_', ' ')}
-              </span>
-            </div>
-
-            {/* Content Sections */}
-            <div className="p-4 flex flex-col gap-4 flex-1">
-              {/* Blockers */}
-              {(activeTab === 'both' || activeTab === 'blockers') && (
-                <div className="flex flex-col gap-2">
-                  <span className="text-[10.5px] font-black uppercase tracking-wider text-accent flex items-center gap-1">
-                    <AlertTriangle size={13} />
-                    <span>Blockers / Challenges</span>
-                  </span>
-
-                  {item.blockers?.length === 0 ? (
-                    <span className="text-xs text-slateText-muted italic">No blockers logged.</span>
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      {item.blockers.map((b: string, i: number) => {
-                        const isKey = item.keyBlockerIndex === i;
-                        return (
-                          <div
-                            key={i}
-                            className={`p-2 text-xs border leading-relaxed ${
-                              isKey
-                                ? 'bg-accent-tint border-accent text-accent-hover font-bold'
-                                : 'bg-[#f8f7f7] border-ink/20 text-ink'
-                            }`}
-                          >
-                            {isKey && (
-                              <span className="text-[9px] font-black uppercase bg-accent text-white px-1.5 py-0.5 mr-1.5">
-                                Key Issue
-                              </span>
-                            )}
-                            <span>{b}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Achievements */}
-              {(activeTab === 'both' || activeTab === 'achievements') && (
-                <div className="flex flex-col gap-2">
-                  <span className="text-[10.5px] font-black uppercase tracking-wider text-[#d97706] flex items-center gap-1">
-                    <Trophy size={13} />
-                    <span>Achievements & Highlights</span>
-                  </span>
-
-                  {item.achievements?.length === 0 ? (
-                    <span className="text-xs text-slateText-muted italic">No highlights entered.</span>
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      {item.achievements.map((a: string, i: number) => {
-                        const isKey = item.keyAchievementIndex === i;
-                        return (
-                          <div
-                            key={i}
-                            className={`p-2 text-xs border leading-relaxed ${
-                              isKey
-                                ? 'bg-[#fef3c7] border-[#d97706] text-[#92400e] font-bold'
-                                : 'bg-[#f8f7f7] border-ink/20 text-ink'
-                            }`}
-                          >
-                            {isKey && (
-                              <span className="text-[9px] font-black uppercase bg-[#d97706] text-white px-1.5 py-0.5 mr-1.5">
-                                Key
-                              </span>
-                            )}
-                            <span>{a}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="p-3 bg-[#f8f7f7] border-t border-ink/20 flex justify-end">
-              <Link
-                href={`/reports/${item.reportId}`}
-                className="text-xs font-bold text-ink hover:text-accent underline"
-              >
-                Inspect Full Report
-              </Link>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalItems={items.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            itemName="entries"
+            className="border-2 border-ink/40 shadow-sm"
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -17,41 +17,47 @@ import {
   Filter,
   ArrowUpRight,
 } from 'lucide-react';
+import { Pagination } from '@/components/ui/Pagination';
+
+import useSWR from 'swr';
 
 export default function ReportHistoryPage() {
   const router = useRouter();
   const { user, isManager } = useAuth();
-  const [reports, setReports] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
-  const fetchReports = async () => {
-    setIsLoading(true);
-    try {
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
+
+  const { data: reportsData, isLoading } = useSWR(
+    ['reports-history', isManager, statusFilter],
+    async () => {
       if (isManager) {
         const res = await ApiClient.getReports({
           status: statusFilter !== 'ALL' ? (statusFilter as any) : undefined,
         });
-        setReports(res.reports || []);
+        return res?.reports || [];
       } else {
         const res = await ApiClient.getMyHistory(1, 50);
-        let list = res.reports || [];
+        let list = res?.reports || [];
         if (statusFilter !== 'ALL') {
           list = list.filter((r: any) => r.status === statusFilter);
         }
-        setReports(list);
+        return list;
       }
-    } catch (err) {
-      console.error('Failed to load reports from database:', err);
-      setReports([]);
-    } finally {
-      setIsLoading(false);
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
     }
-  };
+  );
 
-  useEffect(() => {
-    fetchReports();
-  }, [isManager, statusFilter]);
+  const reports = reportsData || [];
+  const paginatedReports = reports.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const getStatusBadge = (st: string) => {
     switch (st) {
@@ -66,7 +72,7 @@ export default function ReportHistoryPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !reportsData) {
     return <ReportHistorySkeleton />;
   }
 
@@ -134,7 +140,7 @@ export default function ReportHistoryPage() {
                   </td>
                 </tr>
               ) : (
-                reports.map((r) => {
+                paginatedReports.map((r) => {
                   const range = formatDateRange(r.weekStartDate, r.weekEndDate);
                   const isSubmitted = r.status === 'SUBMITTED';
                   const isNeedsCorrection = r.status === 'NEEDS_CORRECTION';
@@ -256,6 +262,14 @@ export default function ReportHistoryPage() {
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          currentPage={currentPage}
+          totalItems={reports.length}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          itemName="reports"
+        />
       </div>
     </div>
   );

@@ -17,7 +17,11 @@ import {
   ArrowUpRight,
   ExternalLink,
   X,
+  Tag,
+  Sparkles,
 } from 'lucide-react';
+import { parseReviewComment } from '@/lib/review-feedback';
+import useSWR from 'swr';
 import { ReportDetailSkeleton } from '@/components/ui/Skeleton';
 
 export default function ReportDetailPage() {
@@ -26,26 +30,24 @@ export default function ReportDetailPage() {
   const router = useRouter();
   const { isManager } = useAuth();
 
-  const [report, setReport] = useState<any>(null);
   const [selectedVersionNum, setSelectedVersionNum] = useState<number>(1);
   const [showVersionModal, setShowVersionModal] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const { data: report, isLoading, error } = useSWR(
+    id ? ['report-detail', id] : null,
+    () => ApiClient.getReport(id),
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+      keepPreviousData: true,
+    }
+  );
 
   useEffect(() => {
-    if (id) {
-      ApiClient.getReport(id)
-        .then((r) => {
-          setReport(r);
-          setSelectedVersionNum(r.currentVersionNumber || 1);
-        })
-        .catch((err) => {
-          console.error('Failed to load report from database:', err);
-          setError('Report not found in database.');
-        })
-        .finally(() => setIsLoading(false));
+    if (report?.currentVersionNumber) {
+      setSelectedVersionNum(report.currentVersionNumber);
     }
-  }, [id]);
+  }, [report?.currentVersionNumber]);
 
   const renderDeliverableLink = (val?: string) => {
     if (!val || !val.trim()) {
@@ -74,7 +76,7 @@ export default function ReportDetailPage() {
     return <span className="font-mono text-ink/85 break-all">{trimmed}</span>;
   };
 
-  if (isLoading) {
+  if (isLoading && !report) {
     return <ReportDetailSkeleton />;
   }
 
@@ -322,29 +324,106 @@ export default function ReportDetailPage() {
             </span>
           </div>
 
-          <div className="flex flex-col gap-2">
-            {report.reviewComments.map((rc: any) => (
-              <div
-                key={rc.id}
-                className={`p-3 border flex flex-col gap-1 ${
-                  rc.action === 'REQUESTED_CHANGES'
-                    ? 'bg-accent-tint border-accent'
-                    : 'bg-[#dcfce7] border-[#166534]'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-ink">
-                    {rc.reviewer?.fullName || 'Manager'} ({rc.reviewer?.title || 'Reviewer'})
-                  </span>
-                  <span className="text-[10.5px] font-mono text-slateText-secondary">
-                    {new Date(rc.createdAt).toLocaleString()}
-                  </span>
+          <div className="flex flex-col gap-3">
+            {report.reviewComments.map((rc: any) => {
+              const structured = parseReviewComment(rc.comment);
+              const isChangeReq = rc.action === 'REQUESTED_CHANGES';
+
+              return (
+                <div
+                  key={rc.id}
+                  className={`p-3.5 border-2 flex flex-col gap-2.5 ${
+                    isChangeReq ? 'bg-accent-tint/40 border-accent' : 'bg-[#dcfce7]/50 border-[#166534]'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-ink/20 pb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-ink">
+                        {rc.reviewer?.fullName || 'Manager'} ({rc.reviewer?.title || 'Reviewer'})
+                      </span>
+                      <span
+                        className={`text-[9.5px] font-mono font-black uppercase px-2 py-0.5 border ${
+                          isChangeReq
+                            ? 'bg-accent text-white border-accent'
+                            : 'bg-[#166534] text-white border-[#166534]'
+                        }`}
+                      >
+                        {isChangeReq ? 'Changes Requested' : 'Approved'}
+                      </span>
+                    </div>
+                    <span className="text-[10.5px] font-mono text-slateText-secondary">
+                      {new Date(rc.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {structured.summary && (
+                    <p className="text-xs font-semibold text-ink bg-white p-2.5 border border-ink/20 italic">
+                      "{structured.summary}"
+                    </p>
+                  )}
+
+                  {structured.taskFeedback && structured.taskFeedback.length > 0 && (
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-accent flex items-center gap-1">
+                        <Tag size={12} />
+                        <span>Flagged Tasks ({structured.taskFeedback.length}):</span>
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {structured.taskFeedback.map((tf, idx) => (
+                          <div key={idx} className="p-2 bg-white border border-accent/60 flex flex-col gap-1 text-xs">
+                            <div className="flex items-center justify-between font-bold text-ink">
+                              <span>• {tf.taskName}</span>
+                              <div className="flex flex-wrap gap-1">
+                                {tf.tags?.map((t, ti) => (
+                                  <span key={ti} className="px-1.5 py-0.2 bg-accent text-white text-[9px] font-bold">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            {tf.note && (
+                              <p className="text-[11px] text-ink/90 italic pl-2 border-l-2 border-accent">
+                                Directive: {tf.note}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {structured.blockerFeedback && structured.blockerFeedback.length > 0 && (
+                    <div className="flex flex-col gap-1 pt-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-ink flex items-center gap-1">
+                        <AlertTriangle size={12} className="text-accent" />
+                        <span>Blocker Directives:</span>
+                      </span>
+                      {structured.blockerFeedback.map((bf, idx) => (
+                        <div key={idx} className="p-2 bg-white border border-ink/20 text-xs">
+                          <span className="text-slateText-secondary block">Blocker: "{bf.blocker}"</span>
+                          <span className="font-bold text-ink block mt-0.5">Directive: {bf.note}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {structured.highlightFeedback && structured.highlightFeedback.length > 0 && (
+                    <div className="flex flex-col gap-1 pt-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#166534] flex items-center gap-1">
+                        <Sparkles size={12} />
+                        <span>Commendations:</span>
+                      </span>
+                      {structured.highlightFeedback.map((hf, idx) => (
+                        <div key={idx} className="p-2 bg-white border border-[#166534]/40 text-xs">
+                          <span className="text-slateText-secondary block">Highlight: "{hf.highlight}"</span>
+                          <span className="font-bold text-[#166534] block mt-0.5">Praise: {hf.note}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs font-medium text-ink italic">
-                  "{rc.comment}"
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

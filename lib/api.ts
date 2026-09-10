@@ -7,7 +7,7 @@ export class ApiClient {
   }
 
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = this.getToken();
+    const token = ApiClient.getToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -108,10 +108,25 @@ export class ApiClient {
     return this.request<any>(`/reports/${id}`);
   }
 
-  static async reviewReport(id: string, action: 'APPROVE' | 'REQUEST_CHANGES', comment?: string) {
+  static async reviewReport(
+    id: string,
+    action: 'APPROVE' | 'REQUEST_CHANGES',
+    comment?: string,
+    structured?: {
+      taskFeedback?: Array<{ taskName: string; note: string; tags?: string[] }>;
+      blockerFeedback?: Array<{ blocker: string; note: string }>;
+      highlightFeedback?: Array<{ highlight: string; note: string }>;
+    }
+  ) {
     return this.request<any>(`/reports/${id}/review`, {
       method: 'POST',
-      body: JSON.stringify({ action, comment }),
+      body: JSON.stringify({
+        action,
+        comment,
+        taskFeedback: structured?.taskFeedback,
+        blockerFeedback: structured?.blockerFeedback,
+        highlightFeedback: structured?.highlightFeedback,
+      }),
     });
   }
 
@@ -121,8 +136,17 @@ export class ApiClient {
     return this.request<any>(`/dashboard/summary${validWeek}`);
   }
 
-  static async getDashboardCharts() {
-    return this.request<any>('/dashboard/charts');
+  static async getDashboardCharts(params?: { week?: string; projectId?: string; memberId?: string }) {
+    const cleanParams: Record<string, string> = {};
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        if (v && v !== 'undefined' && v !== 'ALL') {
+          cleanParams[k] = v;
+        }
+      }
+    }
+    const query = new URLSearchParams(cleanParams).toString();
+    return this.request<any>(`/dashboard/charts${query ? `?${query}` : ''}`);
   }
 
   static async getBlockersAndAchievements(week?: string) {
@@ -132,7 +156,7 @@ export class ApiClient {
 
   // Users
   static async getUsers() {
-    return this.request<any[]>('/users');
+    return ApiClient.request<any[]>('/users');
   }
 
   static async getUserProfile(id: string) {
@@ -205,7 +229,11 @@ export class ApiClient {
     currentPath?: string,
     tabContext?: any,
   ) {
-    return this.request<{ answer: string; modelUsed: string }>('/ai/chat', {
+    return this.request<{
+      answer: string;
+      modelUsed: string;
+      toolCall?: { tool: string; data: any };
+    }>('/ai/chat', {
       method: 'POST',
       body: JSON.stringify({ query, currentTab, currentPath, tabContext }),
     });

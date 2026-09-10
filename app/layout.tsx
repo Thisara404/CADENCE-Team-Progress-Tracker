@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/context/AuthContext';
+import { SWRProvider } from '@/components/providers/SWRProvider';
 
 export const metadata: Metadata = {
   title: 'Cadence — Weekly Report Generator & Team Dashboard',
@@ -16,7 +17,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-[#f3f2f2] text-ink antialiased" suppressHydrationWarning>
         <AuthProvider>
-          {children}
+          <SWRProvider>
+            {children}
+          </SWRProvider>
         </AuthProvider>
       </body>
     </html>

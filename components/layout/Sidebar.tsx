@@ -35,7 +35,6 @@ export function Sidebar() {
     { label: 'Team Reports', href: '/reports/history', icon: History },
     { label: 'Weekly Blockers', href: '/manager/blockers', icon: ShieldAlert },
     { label: 'Projects', href: '/projects', icon: FolderGit2 },
-    { label: 'Users & Roles', href: '/admin/users', icon: Users },
     { label: 'Profile & Settings', href: '/settings', icon: Settings },
   ];
 
@@ -60,7 +59,7 @@ export function Sidebar() {
             CADENCE
           </span>
           <span className="text-[10px] text-slateText-muted uppercase tracking-wider leading-tight">
-            Acme Engineering
+            Team Progress Tracker
           </span>
         </div>
       </div>
@@ -118,7 +117,6 @@ export function Sidebar() {
             </span>
           </div>
         </Link>
-
         <button
           onClick={() => {
             logout();
@@ -129,6 +127,9 @@ export function Sidebar() {
           <LogOut size={13} />
           <span>Sign out</span>
         </button>
+        <div className="text-[10.5px] text-slateText-muted truncate">
+          <p>© 2026 Cadence v1.0.0 — By Thisara Dasun</p>
+        </div>
       </div>
     </aside>
   );

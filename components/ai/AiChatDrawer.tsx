@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../lib/api';
-import { Sparkles, X, Send, Maximize2, Minimize2, Shield, Compass } from 'lucide-react';
+import { Sparkles, X, Send, Maximize2, Minimize2, Shield, Compass, CheckCircle2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface ChatMessage {
@@ -12,6 +12,10 @@ interface ChatMessage {
   sender: 'user' | 'ai';
   text: string;
   meta?: string;
+  toolCall?: {
+    tool: string;
+    data: any;
+  };
 }
 
 // Authentic Claude AI-style Starburst / Asterisk Icon
@@ -38,6 +42,7 @@ function ClaudeBurstIcon({ className = 'w-5 h-5' }: { className?: string }) {
 
 export function AiChatDrawer() {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, role, isManager } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -69,14 +74,14 @@ export function AiChatDrawer() {
       return {
         id: 'init-member',
         sender: 'ai',
-        text: `Hello **${firstName}**! I'm your **Cadence Engineering Copilot**.\n\nYou are currently on the **${currentTabInfo.name}** tab.\n\nI can help you:\n- Draft technical tasks and calculate spent hours\n- Articulate and format blockers clearly\n- Check your latest submission status\n- Explain how to use this tab or any other tab in this workspace!`,
+        text: `Hello **${firstName}**! I'm your **Cadence Engineering Copilot**.\n\nYou are currently on the **${currentTabInfo.name}** tab.\n\nI can help you:\n- Draft technical tasks and calculate spent hours\n- Articulate and format blockers clearly\n- Check your latest submission status\n- Auto-fill report fields using internal tools\n- Explain how to use this tab or any other tab in this workspace!`,
         meta: `CADENCE COPILOT · ${displayRole} VIEW`,
       };
     } else {
       return {
         id: 'init-manager',
         sender: 'ai',
-        text: `Hello **${firstName}**! I'm your **Cadence Management Copilot**.\n\nYou are currently on the **${currentTabInfo.name}** tab.\n\nAsk about open blockers, submission compliance rates, sprint velocity, team member status, or full details on any workspace tab.`,
+        text: `Hello **${firstName}**! I'm your **Cadence Management Copilot**.\n\nYou are currently on the **${currentTabInfo.name}** tab.\n\nAsk about open blockers, submission compliance rates, sprint velocity, team member status, auto-generating sample reports, or full details on any workspace tab.`,
         meta: `CADENCE COPILOT · ${displayRole} VIEW`,
       };
     }
@@ -99,25 +104,25 @@ export function AiChatDrawer() {
     if (role === 'TEAM_MEMBER') {
       if (pathname === '/reports/new') {
         return [
+          '⚡ Auto-fill 5 tasks, blockers & highlights',
           'Help me draft my tasks',
           'How do I format blockers?',
           'Explain this tab',
-          'Check my logged hours',
         ];
       }
       if (pathname.startsWith('/reports/history')) {
         return [
+          '⚡ Auto-fill 5 tasks, blockers & highlights',
           'Explain my report statuses',
           'What does Needs Correction mean?',
-          'Explain this tab',
           'Show all tabs',
         ];
       }
       if (pathname.startsWith('/projects')) {
         return [
+          '⚡ Auto-fill 5 tasks, blockers & highlights',
           'Which project codes exist?',
           'Explain this tab',
-          'How do projects link to reports?',
           'Show all tabs',
         ];
       }
@@ -129,19 +134,19 @@ export function AiChatDrawer() {
         ];
       }
       return [
+        '⚡ Auto-fill 5 tasks, blockers & highlights',
         'Help draft weekly report',
         'Format my blockers',
         'Explain this tab',
-        'Show all tabs',
       ];
     } else {
       // Manager / Admin chips
       if (pathname === '/dashboard') {
         return [
+          'Review pending submissions',
           'What is blocking the team?',
           'Summarise W37',
           'Who is late on submission?',
-          'Explain this tab',
         ];
       }
       if (pathname.startsWith('/manager/blockers')) {
@@ -168,10 +173,10 @@ export function AiChatDrawer() {
         ];
       }
       return [
+        'Review pending submissions',
         'What is blocking the team?',
         'Summarise W37',
         'Who is late?',
-        'Explain this tab',
       ];
     }
   };
@@ -206,8 +211,24 @@ export function AiChatDrawer() {
         sender: 'ai',
         text: res.answer,
         meta: res.modelUsed || 'CADENCE AI ASSISTANT',
+        toolCall: res.toolCall,
       };
       setMessages((prev) => [...prev, aiMsg]);
+
+      // If toolCall returned, trigger auto-fill (strictly for TEAM_MEMBER)
+      if (res.toolCall && res.toolCall.tool === 'fill_report_form' && role === 'TEAM_MEMBER') {
+        window.dispatchEvent(
+          new CustomEvent('cadence:ai-autofill', { detail: res.toolCall.data })
+        );
+        try {
+          sessionStorage.setItem(
+            'cadence_pending_autofill',
+            JSON.stringify(res.toolCall.data)
+          );
+        } catch (e) {
+          console.error('Failed to store cadence_pending_autofill in sessionStorage:', e);
+        }
+      }
     } catch (err: any) {
       const errorMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
@@ -401,6 +422,55 @@ export function AiChatDrawer() {
                     >
                       {m.text}
                     </ReactMarkdown>
+                  </div>
+                )}
+
+                {m.toolCall && (
+                  <div className="mt-2 p-2.5 bg-[#201e1d] text-[#f3f2f2] border-2 border-accent flex flex-col gap-2 shadow-sm">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-mono font-black text-accent flex items-center gap-1.5">
+                        <Sparkles size={13} />
+                        <span>Tool Executed: {m.toolCall.tool}</span>
+                      </span>
+                      <span className="text-[10px] uppercase font-mono text-[#9b9797]">
+                        {m.toolCall.data?.tasks?.length || 0} Tasks Generated
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      {pathname === '/reports/new' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent('cadence:ai-autofill', {
+                                detail: m.toolCall?.data,
+                              })
+                            );
+                          }}
+                          className="px-3 py-1.5 bg-[#166534] hover:bg-[#15803d] text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                        >
+                          <CheckCircle2 size={13} />
+                          <span>Form Populated ✓ (Click to Re-apply)</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try {
+                              sessionStorage.setItem(
+                                'cadence_pending_autofill',
+                                JSON.stringify(m.toolCall?.data)
+                              );
+                            } catch (e) {}
+                            router.push('/reports/new');
+                          }}
+                          className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-[11px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                        >
+                          <span>Open Weekly Report Form & Apply →</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
