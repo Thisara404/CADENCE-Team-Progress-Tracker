@@ -199,10 +199,15 @@ export class ApiClient {
   }
 
   // AI
-  static async chatAi(query: string) {
+  static async chatAi(
+    query: string,
+    currentTab?: string,
+    currentPath?: string,
+    tabContext?: any,
+  ) {
     return this.request<{ answer: string; modelUsed: string }>('/ai/chat', {
       method: 'POST',
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, currentTab, currentPath, tabContext }),
     });
   }
 }

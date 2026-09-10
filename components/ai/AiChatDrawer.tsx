@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../lib/api';
-import { Sparkles, X, Send, Maximize2, Minimize2 } from 'lucide-react';
+import { Sparkles, X, Send, Maximize2, Minimize2, Shield, Compass } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface ChatMessage {
@@ -22,7 +24,6 @@ function ClaudeBurstIcon({ className = 'w-5 h-5' }: { className?: string }) {
       className={className}
     >
       <circle cx="12" cy="12" r="2.2" />
-      {/* 8 rounded radiating petals forming the Claude starburst */}
       <rect x="10.8" y="2.2" width="2.4" height="6.2" rx="1.2" />
       <rect x="10.8" y="15.6" width="2.4" height="6.2" rx="1.2" />
       <rect x="2.2" y="10.8" width="6.2" height="2.4" rx="1.2" />
@@ -36,27 +37,146 @@ function ClaudeBurstIcon({ className = 'w-5 h-5' }: { className?: string }) {
 }
 
 export function AiChatDrawer() {
+  const pathname = usePathname();
+  const { user, role, isManager } = useAuth();
+
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'init-1',
-      sender: 'ai',
-      text: 'I can read every report in this workspace. Ask about open blockers, who is behind on submission, or a project-level summary.',
-      meta: 'CADENCE AI ASSISTANT',
-    },
-  ]);
+  // Friendly tab naming
+  const getTabInfo = (path: string, manager: boolean) => {
+    if (path === '/dashboard') return { id: 'dashboard', name: 'Dashboard' };
+    if (path === '/reports/new') return { id: 'weekly-report-new', name: 'Weekly Report Form' };
+    if (path.startsWith('/reports/history')) return { id: 'reports-history', name: manager ? 'Team Reports' : 'My History' };
+    if (path.startsWith('/reports/')) return { id: 'reports-detail', name: 'Report Details' };
+    if (path.startsWith('/manager/blockers')) return { id: 'weekly-blockers', name: 'Weekly Blockers' };
+    if (path.startsWith('/projects')) return { id: 'projects', name: 'Projects' };
+    if (path.startsWith('/admin/users')) return { id: 'admin-users', name: 'Users & Roles' };
+    if (path.startsWith('/settings')) return { id: 'settings', name: 'Profile & Settings' };
+    return { id: 'workspace', name: 'Workspace Overview' };
+  };
 
-  const suggestionChips = [
-    'What is blocking the team?',
-    'Summarise W37',
-    'Who is late?',
-    'Where is time going?',
-  ];
+  const currentTabInfo = getTabInfo(pathname || '', isManager);
+  const firstName = user?.fullName ? user.fullName.split(' ')[0] : 'there';
+  const displayRole = role === 'ADMIN' ? 'ADMIN' : role === 'MANAGER' ? 'MANAGER' : 'MEMBER';
+
+  // Initial welcome message tailored to role and current tab
+  const getInitialMessage = (): ChatMessage => {
+    if (role === 'TEAM_MEMBER') {
+      return {
+        id: 'init-member',
+        sender: 'ai',
+        text: `Hello **${firstName}**! I'm your **Cadence Engineering Copilot**.\n\nYou are currently on the **${currentTabInfo.name}** tab.\n\nI can help you:\n- Draft technical tasks and calculate spent hours\n- Articulate and format blockers clearly\n- Check your latest submission status\n- Explain how to use this tab or any other tab in this workspace!`,
+        meta: `CADENCE COPILOT · ${displayRole} VIEW`,
+      };
+    } else {
+      return {
+        id: 'init-manager',
+        sender: 'ai',
+        text: `Hello **${firstName}**! I'm your **Cadence Management Copilot**.\n\nYou are currently on the **${currentTabInfo.name}** tab.\n\nAsk about open blockers, submission compliance rates, sprint velocity, team member status, or full details on any workspace tab.`,
+        meta: `CADENCE COPILOT · ${displayRole} VIEW`,
+      };
+    }
+  };
+
+  const [messages, setMessages] = useState<ChatMessage[]>([getInitialMessage()]);
+
+  // Update initial message when user or tab changes if only 1 message exists
+  useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length <= 1) {
+        return [getInitialMessage()];
+      }
+      return prev;
+    });
+  }, [pathname, user?.id, role]);
+
+  // Contextual suggestion chips based on active tab and role
+  const getSuggestionChips = () => {
+    if (role === 'TEAM_MEMBER') {
+      if (pathname === '/reports/new') {
+        return [
+          'Help me draft my tasks',
+          'How do I format blockers?',
+          'Explain this tab',
+          'Check my logged hours',
+        ];
+      }
+      if (pathname.startsWith('/reports/history')) {
+        return [
+          'Explain my report statuses',
+          'What does Needs Correction mean?',
+          'Explain this tab',
+          'Show all tabs',
+        ];
+      }
+      if (pathname.startsWith('/projects')) {
+        return [
+          'Which project codes exist?',
+          'Explain this tab',
+          'How do projects link to reports?',
+          'Show all tabs',
+        ];
+      }
+      if (pathname.startsWith('/settings')) {
+        return [
+          'What can I customize here?',
+          'Explain this tab',
+          'Show all tabs',
+        ];
+      }
+      return [
+        'Help draft weekly report',
+        'Format my blockers',
+        'Explain this tab',
+        'Show all tabs',
+      ];
+    } else {
+      // Manager / Admin chips
+      if (pathname === '/dashboard') {
+        return [
+          'What is blocking the team?',
+          'Summarise W37',
+          'Who is late on submission?',
+          'Explain this tab',
+        ];
+      }
+      if (pathname.startsWith('/manager/blockers')) {
+        return [
+          'Analyze key blockers',
+          'Show team achievements',
+          'Explain this tab',
+          'Identify systemic bottlenecks',
+        ];
+      }
+      if (pathname.startsWith('/admin/users')) {
+        return [
+          'User role guidelines',
+          'How to reset passwords?',
+          'Explain this tab',
+          'Show all tabs',
+        ];
+      }
+      if (pathname.startsWith('/projects')) {
+        return [
+          'Active projects summary',
+          'Creating a new project',
+          'Explain this tab',
+        ];
+      }
+      return [
+        'What is blocking the team?',
+        'Summarise W37',
+        'Who is late?',
+        'Explain this tab',
+      ];
+    }
+  };
+
+  const suggestionChips = getSuggestionChips();
 
   useEffect(() => {
     if (isOpen) {
@@ -72,7 +192,7 @@ export function AiChatDrawer() {
       id: `u-${Date.now()}`,
       sender: 'user',
       text: prompt,
-      meta: 'YOU',
+      meta: user?.fullName ? user.fullName.toUpperCase() : 'YOU',
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -80,7 +200,7 @@ export function AiChatDrawer() {
     setIsLoading(true);
 
     try {
-      const res = await ApiClient.chatAi(prompt);
+      const res = await ApiClient.chatAi(prompt, currentTabInfo.name, pathname);
       const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: 'ai',
@@ -109,50 +229,75 @@ export function AiChatDrawer() {
           className={`flex flex-col border-2 border-[#201e1d] bg-[#f3f2f2] shadow-[0_12px_32px_rgba(45,43,43,0.22)] overflow-hidden transition-all duration-200 ease-out ${
             isExpanded
               ? 'w-[calc(100vw-24px)] sm:w-[780px] max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-32px)] h-[80vh] sm:h-[82vh] max-h-[820px]'
-              : 'w-[calc(100vw-24px)] sm:w-[376px] max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-40px)] h-[500px] sm:h-[520px] max-h-[calc(100vh-100px)]'
+              : 'w-[calc(100vw-24px)] sm:w-[396px] max-w-[calc(100vw-24px)] sm:max-w-[calc(100vw-40px)] h-[520px] sm:h-[540px] max-h-[calc(100vh-100px)]'
           }`}
           style={{ animation: 'slideIn 0.2s ease' }}
         >
           {/* Header */}
-          <div className="flex items-center gap-2.5 px-3.5 py-3 bg-[#201e1d] text-[#f3f2f2] select-none">
-            {/* Sparkle Red Box */}
-            <div className="w-6 h-6 bg-[#ec3013] flex items-center justify-center shrink-0">
-              <Sparkles size={14} className="text-white fill-white" />
+          <div className="flex flex-col bg-[#201e1d] text-[#f3f2f2] select-none border-b border-[#383534]">
+            {/* Top Bar */}
+            <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
+              {/* Sparkle Red Box */}
+              <div className="w-6 h-6 bg-[#ec3013] flex items-center justify-center shrink-0">
+                <Sparkles size={14} className="text-white fill-white" />
+              </div>
+
+              {/* Title & Role Badge */}
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[12.5px] font-extrabold tracking-[0.08em] uppercase leading-tight truncate">
+                  Cadence Assistant
+                </span>
+                <span
+                  className={`text-[9.5px] font-bold tracking-wider px-1.5 py-0.5 uppercase border ${
+                    role === 'ADMIN'
+                      ? 'bg-[#fee2e2] text-[#991b1b] border-[#f87171]'
+                      : role === 'MANAGER'
+                      ? 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d]'
+                      : 'bg-[#e0f2fe] text-[#075985] border-[#7dd3fc]'
+                  }`}
+                >
+                  {displayRole}
+                </span>
+              </div>
+
+              <div className="flex-1" />
+
+              {/* Expand / Minimize Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-[26px] h-[26px] text-[#f3f2f2] hover:bg-[#444141] flex items-center justify-center transition-colors"
+                title={isExpanded ? 'Collapse to compact view' : 'Full expand'}
+                aria-label={isExpanded ? 'Collapse' : 'Full expand'}
+              >
+                {isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="w-[26px] h-[26px] text-[#f3f2f2] hover:bg-[#444141] flex items-center justify-center transition-colors"
+                title="Close assistant"
+                aria-label="Close assistant"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            {/* Title & Grounding Subtitle */}
-            <div className="flex flex-col min-w-0">
-              <span className="text-[12.5px] font-extrabold tracking-[0.08em] uppercase leading-tight truncate">
-                Cadence Assistant
-              </span>
-              <span className="text-[11px] text-[#bab6b6] leading-tight">
-                Grounded in this week's reports
-              </span>
+            {/* Context Sub-bar: Current Tab Indicator & Safety Badges */}
+            <div className="flex items-center justify-between gap-2 px-3.5 pb-2.5 text-[11px] text-[#bab6b6]">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Compass size={12} className="text-[#ec3013] shrink-0" />
+                <span className="truncate font-mono">
+                  Tab: <strong className="text-white">{currentTabInfo.name}</strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[10px] text-[#9b9797] shrink-0 font-mono">
+                <Shield size={10} className="text-emerald-400" />
+                <span>Read-Only</span>
+              </div>
             </div>
-
-            <div className="flex-1" />
-
-            {/* Expand / Minimize Toggle */}
-            <button
-              type="button"
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="w-[26px] h-[26px] text-[#f3f2f2] hover:bg-[#444141] flex items-center justify-center transition-colors"
-              title={isExpanded ? 'Collapse to compact view' : 'Full expand'}
-              aria-label={isExpanded ? 'Collapse' : 'Full expand'}
-            >
-              {isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-
-            {/* Close Button */}
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="w-[26px] h-[26px] text-[#f3f2f2] hover:bg-[#444141] flex items-center justify-center transition-colors"
-              title="Close assistant"
-              aria-label="Close assistant"
-            >
-              <X size={16} />
-            </button>
           </div>
 
           {/* Messages Body */}
@@ -212,6 +357,28 @@ export function AiChatDrawer() {
                             {children}
                           </li>
                         ),
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto my-2 border border-[#201e1d]/20 bg-white">
+                            <table className="min-w-full text-[11.5px] divide-y divide-[#201e1d]/20">
+                              {children}
+                            </table>
+                          </div>
+                        ),
+                        thead: ({ children }) => (
+                          <thead className="bg-[#eae7e7] font-bold text-[#201e1d]">
+                            {children}
+                          </thead>
+                        ),
+                        th: ({ children }) => (
+                          <th className="px-2 py-1 text-left border-r border-[#201e1d]/10 last:border-r-0">
+                            {children}
+                          </th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="px-2 py-1 border-r border-[#201e1d]/10 last:border-r-0 border-t border-[#201e1d]/10">
+                            {children}
+                          </td>
+                        ),
                         strong: ({ children }) => (
                           <strong className="font-bold text-[#111010]">
                             {children}
@@ -249,13 +416,12 @@ export function AiChatDrawer() {
             {isLoading && (
               <div className="flex flex-col items-start gap-1">
                 <div className="max-w-[94%] p-[10px_13px] bg-[#f8f4f4] border-l-2 border-[#ec3013] text-[#201e1d] shadow-sm flex items-center gap-3">
-                  {/* Claude Breathing Starburst */}
                   <div className="text-[#ec3013] shrink-0 animate-[claude-breathe_2.6s_ease-in-out_infinite]">
                     <ClaudeBurstIcon className="w-5 h-5 text-[#ec3013]" />
                   </div>
 
                   <p className="text-[12.5px] leading-snug text-[#201e1d] font-medium">
-                    Cadence is responding in the background. Once it's complete, you'll see it here.
+                    Cadence is analyzing your request against live workspace data…
                   </p>
                 </div>
 
@@ -295,7 +461,11 @@ export function AiChatDrawer() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask about blockers, velocity, compliance…"
+              placeholder={
+                role === 'TEAM_MEMBER'
+                  ? `Ask about ${currentTabInfo.name}, draft tasks, format blockers…`
+                  : `Ask about blockers, compliance, ${currentTabInfo.name}…`
+              }
               disabled={isLoading}
               className="flex-1 min-w-0 h-[34px] px-2.5 bg-[#f8f4f4] border border-[#201e1d]/40 text-[12.5px] text-[#201e1d] placeholder:text-[#7d7979] focus:outline-none focus:border-[#201e1d]"
             />
