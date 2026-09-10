@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ApiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { DashboardSummary, DashboardCharts } from '@/lib/types';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -126,6 +127,10 @@ export default function DashboardPage() {
       sub: 'Dependencies & environment halts',
     },
   ];
+
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-12">

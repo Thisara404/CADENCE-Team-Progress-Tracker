@@ -18,6 +18,7 @@ import {
   ExternalLink,
   X,
 } from 'lucide-react';
+import { ReportDetailSkeleton } from '@/components/ui/Skeleton';
 
 export default function ReportDetailPage() {
   const params = useParams();
@@ -74,12 +75,7 @@ export default function ReportDetailPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="p-12 text-center text-xs font-mono text-slateText-muted flex flex-col items-center gap-2">
-        <div className="w-6 h-6 border-2 border-accent border-t-transparent animate-spin" />
-        <span>Loading report details from database...</span>
-      </div>
-    );
+    return <ReportDetailSkeleton />;
   }
 
   if (error || !report) {

@@ -11,6 +11,7 @@ import {
   Calendar,
   Layers,
 } from 'lucide-react';
+import { BlockersSkeleton } from '@/components/ui/Skeleton';
 
 export default function SideBySideBlockersPage() {
   const [selectedWeek, setSelectedWeek] = useState('ALL');
@@ -36,6 +37,10 @@ export default function SideBySideBlockersPage() {
   useEffect(() => {
     fetchItems();
   }, [selectedWeek]);
+
+  if (isLoading) {
+    return <BlockersSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-12">

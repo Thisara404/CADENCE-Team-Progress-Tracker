@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { ApiClient } from '@/lib/api';
 import { formatDateRange } from '@/lib/utils';
+import { ReportHistorySkeleton } from '@/components/ui/Skeleton';
 import {
   History,
   CheckCircle,
@@ -64,6 +65,10 @@ export default function ReportHistoryPage() {
         return 'bg-[#f3f2f2] text-ink border-ink/40';
     }
   };
+
+  if (isLoading) {
+    return <ReportHistorySkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-12">

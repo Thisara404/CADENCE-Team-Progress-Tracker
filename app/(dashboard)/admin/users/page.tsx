@@ -18,6 +18,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
+import { UsersSkeleton } from '@/components/ui/Skeleton';
 
 export default function UserManagementPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -181,6 +182,10 @@ export default function UserManagementPage() {
       setErrorBanner(err.message || 'Could not change status.');
     }
   };
+
+  if (isLoading) {
+    return <UsersSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-12">

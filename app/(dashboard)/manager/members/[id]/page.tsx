@@ -14,6 +14,7 @@ import {
   FileText,
   TrendingUp,
 } from 'lucide-react';
+import { MemberProfileSkeleton } from '@/components/ui/Skeleton';
 
 export default function MemberProfilePage() {
   const params = useParams();
@@ -38,12 +39,7 @@ export default function MemberProfilePage() {
   }, [id]);
 
   if (isLoading) {
-    return (
-      <div className="p-12 text-center text-xs font-mono text-slateText-muted flex flex-col items-center gap-2">
-        <div className="w-6 h-6 border-2 border-accent border-t-transparent animate-spin" />
-        <span>Loading member performance profile...</span>
-      </div>
-    );
+    return <MemberProfileSkeleton />;
   }
 
   if (error || !profile) {

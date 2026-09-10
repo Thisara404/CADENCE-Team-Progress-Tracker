@@ -13,6 +13,7 @@ import {
   X,
   FileText,
 } from 'lucide-react';
+import { ProjectsSkeleton } from '@/components/ui/Skeleton';
 
 export default function ProjectsManagementPage() {
   const { isManager } = useAuth();
@@ -104,6 +105,10 @@ export default function ProjectsManagementPage() {
       );
     }
   };
+
+  if (isLoading) {
+    return <ProjectsSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-12">

@@ -16,6 +16,7 @@ import {
   CheckCircle,
   Clock,
 } from 'lucide-react';
+import { WeeklyReportFormSkeleton } from '@/components/ui/Skeleton';
 
 function WeeklyReportFormContent() {
   const router = useRouter();
@@ -67,11 +68,12 @@ function WeeklyReportFormContent() {
 
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
     // Load projects from API or fallback
-    ApiClient.getProjects()
+    const p1 = ApiClient.getProjects()
       .then((data) => {
         if (data && data.length) {
           setProjects(data);
@@ -81,38 +83,42 @@ function WeeklyReportFormContent() {
       .catch(() => {});
 
     // If editing existing report, fetch details
-    if (editId) {
-      ApiClient.getReport(editId)
-        .then((r) => {
-          if (r) {
-            setReportId(r.id);
-            setProjectId(r.projectId);
-            setWeekStartDate(new Date(r.weekStartDate).toISOString().split('T')[0]);
-            setWeekEndDate(new Date(r.weekEndDate).toISOString().split('T')[0]);
-            setStatus(r.status);
+    const p2 = editId
+      ? ApiClient.getReport(editId)
+          .then((r) => {
+            if (r) {
+              setReportId(r.id);
+              setProjectId(r.projectId);
+              setWeekStartDate(new Date(r.weekStartDate).toISOString().split('T')[0]);
+              setWeekEndDate(new Date(r.weekEndDate).toISOString().split('T')[0]);
+              setStatus(r.status);
 
-            const latestVer = r.versions?.[r.versions.length - 1];
-            if (latestVer) {
-              setTasks(latestVer.tasks || []);
-              setTasksPlannedNextWeek(latestVer.tasksPlannedNextWeek || '');
-              setBlockers(latestVer.blockers || []);
-              setKeyBlockerIndex(latestVer.keyBlockerIndex ?? null);
-              setAchievements(latestVer.achievements || []);
-              setKeyAchievementIndex(latestVer.keyAchievementIndex ?? null);
-              setDevHours(latestVer.devHours || 0);
-              setTestingHours(latestVer.testingHours || 0);
-              setMeetingHours(latestVer.meetingHours || 0);
-              setDocHours(latestVer.docHours || 0);
-              setNotes(latestVer.notes || '');
-            }
+              const latestVer = r.versions?.[r.versions.length - 1];
+              if (latestVer) {
+                setTasks(latestVer.tasks || []);
+                setTasksPlannedNextWeek(latestVer.tasksPlannedNextWeek || '');
+                setBlockers(latestVer.blockers || []);
+                setKeyBlockerIndex(latestVer.keyBlockerIndex ?? null);
+                setAchievements(latestVer.achievements || []);
+                setKeyAchievementIndex(latestVer.keyAchievementIndex ?? null);
+                setDevHours(latestVer.devHours || 0);
+                setTestingHours(latestVer.testingHours || 0);
+                setMeetingHours(latestVer.meetingHours || 0);
+                setDocHours(latestVer.docHours || 0);
+                setNotes(latestVer.notes || '');
+              }
 
-            if (r.reviewComments && r.reviewComments.length > 0) {
-              setManagerComment(r.reviewComments[0].comment);
+              if (r.reviewComments && r.reviewComments.length > 0) {
+                setManagerComment(r.reviewComments[0].comment);
+              }
             }
-          }
-        })
-        .catch(() => {});
-    }
+          })
+          .catch(() => {})
+      : Promise.resolve();
+
+    Promise.all([p1, p2]).finally(() => {
+      setIsInitialLoading(false);
+    });
   }, [editId]);
 
   // Add / remove task
@@ -267,6 +273,10 @@ function WeeklyReportFormContent() {
     (Number(testingHours) || 0) +
     (Number(meetingHours) || 0) +
     (Number(docHours) || 0);
+
+  if (isInitialLoading) {
+    return <WeeklyReportFormSkeleton />;
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-12">

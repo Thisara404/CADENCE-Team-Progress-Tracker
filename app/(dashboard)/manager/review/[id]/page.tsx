@@ -15,6 +15,7 @@ import {
   ExternalLink,
   FileCheck,
 } from 'lucide-react';
+import { ReportDetailSkeleton } from '@/components/ui/Skeleton';
 
 export default function ManagerReviewPage() {
   const params = useParams();
@@ -94,11 +95,7 @@ export default function ManagerReviewPage() {
   };
 
   if (isLoading || !report) {
-    return (
-      <div className="p-8 text-center text-xs font-mono text-slateText-muted">
-        Loading review snapshot...
-      </div>
-    );
+    return <ReportDetailSkeleton />;
   }
 
   const range = formatDateRange(report.weekStartDate, report.weekEndDate);
