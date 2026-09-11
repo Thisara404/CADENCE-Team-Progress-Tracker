@@ -7,7 +7,7 @@ Cadence Frontend is an enterprise engineering management workstation built with 
 ## Architecture Overview
 
 * **Frontend**: Next.js 15 hosted on **Vercel** (or local on `http://localhost:3000`).
-* **Backend API**: NestJS 10 hosted on **Vercel** (`https://cadence-server-j78w.vercel.app/api`) or local (`http://localhost:5000/api`).
+* **Backend API**: NestJS 10 REST API hosted on **Vercel Cloud** (`https://cadence-server-j78w.vercel.app/api`) or running locally (`http://localhost:5000/api`).
 * **Database**: **Supabase PostgreSQL** (queried via backend Prisma ORM).
 
 ---
