@@ -187,10 +187,15 @@ function WeeklyReportFormContent() {
       if (data.meetingHours !== undefined) setMeetingHours(Number(data.meetingHours));
       if (data.docHours !== undefined) setDocHours(Number(data.docHours));
       if (data.tasksPlannedNextWeek) setTasksPlannedNextWeek(data.tasksPlannedNextWeek);
+      if (typeof data.notes === 'string') {
+        setNotes(data.notes);
+      }
 
+      const tasksCount = data.tasks?.length || 0;
+      const hasNotes = typeof data.notes === 'string' && data.notes.length > 0;
       setFeedbackMsg({
         type: 'ok',
-        text: `⚡ AI Assistant internal tool auto-filled ${data.tasks?.length || 0} tasks, blockers, achievements, and hours!`,
+        text: `⚡ AI Assistant internal tool auto-filled ${tasksCount} tasks, blockers, achievements, hours${hasNotes ? ', and notes' : ''}!`,
       });
     };
 

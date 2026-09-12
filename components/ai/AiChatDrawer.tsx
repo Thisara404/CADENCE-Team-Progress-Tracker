@@ -452,7 +452,7 @@ export function AiChatDrawer() {
                         <span>Tool Executed: {m.toolCall.tool}</span>
                       </span>
                       <span className="text-[10px] uppercase font-mono text-[#9b9797]">
-                        {m.toolCall.data?.tasks?.length || 0} Tasks Generated
+                        {m.toolCall.data?.tasks?.length || 0} Tasks Generated{m.toolCall.data?.notes ? ' • Notes Included' : ''}
                       </span>
                     </div>
 
