@@ -83,7 +83,13 @@ function WeeklyReportFormContent() {
       .then((data) => {
         if (data && data.length) {
           setProjects(data);
-          setProjectId(data[0].id);
+          setProjectId((prev) => {
+            if (prev) {
+              const matched = data.find((p) => p.id === prev || p.code === prev);
+              return matched ? matched.id : prev;
+            }
+            return data[0].id;
+          });
         }
       })
       .catch(() => {});
@@ -138,6 +144,18 @@ function WeeklyReportFormContent() {
   useEffect(() => {
     const applyAutofill = (data: any) => {
       if (!data) return;
+      if (data.projectId || data.projectCode) {
+        setProjectId((current) => {
+          const matched = projects.find(
+            (p) =>
+              (data.projectId && p.id === data.projectId) ||
+              (data.projectCode && p.code?.toLowerCase() === data.projectCode?.toLowerCase()) ||
+              (data.projectCode && p.name?.toLowerCase().includes(data.projectCode?.toLowerCase())) ||
+              (data.projectName && p.name?.toLowerCase().includes(data.projectName?.toLowerCase()))
+          );
+          return matched ? matched.id : data.projectId || current;
+        });
+      }
       if (data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
         setTasks(
           data.tasks.map((t: any) => ({

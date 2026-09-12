@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { ApiClient } from '../../lib/api';
-import { Sparkles, X, Send, Maximize2, Minimize2, Shield, Compass, CheckCircle2 } from 'lucide-react';
+import { Sparkles, X, Send, Maximize2, Minimize2, Shield, Compass, CheckCircle2, ArrowUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface ChatMessage {
@@ -47,9 +47,24 @@ export function AiChatDrawer() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize / expand text bar like Gemini
+  useEffect(() => {
+    if (!textareaRef.current) return;
+    if (isInputExpanded) {
+      textareaRef.current.style.height = isExpanded ? '220px' : '150px';
+    } else {
+      textareaRef.current.style.height = 'auto';
+      const scrollH = textareaRef.current.scrollHeight;
+      const targetH = Math.min(Math.max(scrollH, 24), 160);
+      textareaRef.current.style.height = `${targetH}px`;
+    }
+  }, [query, isInputExpanded, isExpanded]);
 
   // Friendly tab naming
   const getTabInfo = (path: string, manager: boolean) => {
@@ -202,6 +217,10 @@ export function AiChatDrawer() {
 
     setMessages((prev) => [...prev, userMsg]);
     setQuery('');
+    setIsInputExpanded(false);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '36px';
+    }
     setIsLoading(true);
 
     try {
@@ -519,36 +538,98 @@ export function AiChatDrawer() {
             ))}
           </div>
 
-          {/* Input Bar */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSend();
-            }}
-            className="flex items-center gap-2 p-[11px_12px] border-t-2 border-[#201e1d]/30 bg-[#f3f2f2]"
-          >
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={
-                role === 'TEAM_MEMBER'
-                  ? `Ask about ${currentTabInfo.name}, draft tasks, format blockers…`
-                  : `Ask about blockers, compliance, ${currentTabInfo.name}…`
-              }
-              disabled={isLoading}
-              className="flex-1 min-w-0 h-[34px] px-2.5 bg-[#f8f4f4] border border-[#201e1d]/40 text-[12.5px] text-[#201e1d] placeholder:text-[#7d7979] focus:outline-none focus:border-[#201e1d]"
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !query.trim()}
-              className="w-[34px] h-[34px] bg-[#ec3013] text-[#f3f2f2] flex items-center justify-center shrink-0 hover:bg-[#d4270e] transition-colors disabled:opacity-50 cursor-pointer"
-              title="Send message"
-              aria-label="Send"
+          {/* Gemini-Style Unified Input Capsule (Light Theme) */}
+          <div className="p-3 bg-[#f3f2f2] border-t border-[#201e1d]/15">
+            <div
+              className={`relative flex flex-col bg-white text-[#201e1d] rounded-2xl p-3 sm:p-3.5 border border-[#201e1d]/30 shadow-xs transition-all duration-200 focus-within:border-[#201e1d] focus-within:shadow-md ${
+                isInputExpanded ? 'min-h-[200px]' : ''
+              }`}
             >
-              <Send size={15} />
-            </button>
-          </form>
+              {/* Top-Right Expand & Clear Controls */}
+              <div className="absolute top-3 right-3 z-10 flex items-center gap-1">
+                {query.trim().length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery('');
+                      if (textareaRef.current) {
+                        textareaRef.current.style.height = '24px';
+                        textareaRef.current.focus();
+                      }
+                    }}
+                    className="w-6 h-6 flex items-center justify-center text-[#7d7979] hover:text-[#201e1d] hover:bg-[#f3f2f2] rounded-md transition-colors cursor-pointer"
+                    title="Clear text"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsInputExpanded(!isInputExpanded)}
+                  className="w-6 h-6 flex items-center justify-center text-[#7d7979] hover:text-[#201e1d] hover:bg-[#f3f2f2] rounded-md transition-colors cursor-pointer"
+                  title={isInputExpanded ? 'Collapse text bar' : 'Expand text bar'}
+                  aria-label={isInputExpanded ? 'Collapse text bar' : 'Expand text bar'}
+                >
+                  {isInputExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                </button>
+              </div>
+
+              {/* Textarea: Full width, borderless, clean light background */}
+              <textarea
+                ref={textareaRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                rows={1}
+                placeholder={
+                  role === 'TEAM_MEMBER'
+                    ? `Ask about ${currentTabInfo.name}, draft tasks, autofill…`
+                    : `Ask about blockers, compliance, ${currentTabInfo.name}…`
+                }
+                disabled={isLoading}
+                className={`w-full pr-14 bg-transparent border-0 outline-none ring-0 focus:outline-none focus:ring-0 text-[13px] leading-relaxed text-[#201e1d] placeholder:text-[#7d7979] resize-none overflow-y-auto font-sans scrollbar-thin transition-[height] duration-150 ${
+                  isInputExpanded ? 'h-[160px]' : 'min-h-[24px] max-h-[160px]'
+                }`}
+              />
+
+              {/* Bottom Toolbar inside the capsule */}
+              <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-[#201e1d]/10">
+                {/* Left side: Clean Keyboard shortcut hint */}
+                <span className="text-[11px] text-[#7d7979] select-none font-medium truncate">
+                  Shift+Enter for new line · Enter to send
+                </span>
+
+                {/* Right side: Character count & Circular ArrowUp Send Button */}
+                <div className="flex items-center gap-2.5 shrink-0 ml-2">
+                  {query.length > 0 && (
+                    <span className="text-[10.5px] text-[#7d7979] font-mono select-none">
+                      {query.length} chars{query.split('\n').length > 1 ? ` · ${query.split('\n').length}L` : ''}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleSend()}
+                    disabled={isLoading || !query.trim()}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                      query.trim() && !isLoading
+                        ? 'bg-[#ec3013] text-white hover:bg-[#d4270e] shadow-sm hover:scale-105 active:scale-95'
+                        : 'bg-[#e5e7eb] text-[#9ca3af] cursor-not-allowed opacity-60'
+                    }`}
+                    title="Send message (Enter)"
+                    aria-label="Send"
+                  >
+                    <ArrowUp size={16} className="stroke-[2.5]" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
